@@ -1,0 +1,15 @@
+{
+  "name": "node-pgp",
+  "version": "0.0.0",
+  "scripts": {
+    "test": "tests/run.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cdauth/node-pgp.git"
+  },
+  "license": "MIT",
+  "description": "A node.js implementation of OpenPGP.",
+  "dependencies": {
+  }
+}
