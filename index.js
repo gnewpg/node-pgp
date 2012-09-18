@@ -1,6 +1,6 @@
 module.exports = {
 	basicTypes : require("./basicTypes"),
-	bufferedStream : require("./bufferedStream"),
+	BufferedStream : require("./bufferedStream"),
 	formats : require("./formats"),
 	packetContent : require("./packetContent"),
 	packets : require("./packets"),

@@ -4,15 +4,37 @@
  * @param stream {Readable Stream|Buffer|String} The stream to read from
 */
 module.exports = function(stream) {
-	if(stream instanceof String)
-		stream = new Buffer(stream, "binary");
-
-	var usingBuffer = (stream instanceof Buffer);
-	var buffer = (usingBuffer ? stream : new Buffer(0));
-	var ended = usingBuffer;
+	var buffer = new Buffer(0);
+	var ended = false;
+	var endError = null;
 	var wantToRead = [ ];
 	
-	var checkRead = function() {
+	this._sendData = sendData;
+	this._sendDataAtStart = sendDataAtStart;
+	this._endData = endData;
+	this.read = read;
+
+	if(stream instanceof Buffer)
+	{
+		sendData(stream);
+		endData();
+	}
+	else if(typeof stream == "string")
+	{
+		sendData(new Buffer(stream, "binary"));
+		endData();
+	}
+	else if(stream != null)
+	{
+		stream.on("data", function(data) {
+			sendData(data);
+		});
+		stream.on("end", function() {
+			endData();
+		});
+	}
+
+	function checkRead() {
 		while(wantToRead.length > 0)
 		{
 			var it = wantToRead[0];
@@ -21,7 +43,10 @@ module.exports = function(stream) {
 			{
 				wantToRead.shift();      // We need to do this first as the callback
 				buffer = new Buffer(0);  // function might call checkRead()
-				it.callback(null, bufferBkp);
+				if(endError)
+					it.callback(endError);
+				else
+					it.callback(null, bufferBkp);
 			}
 			else if(it.bytes != -1 && buffer.length >= it.bytes)
 			{
@@ -32,25 +57,34 @@ module.exports = function(stream) {
 			else if(ended)
 			{
 				wantToRead.shift();
-				it.callback(new Error("Stream has ended before the requested number of bytes was sent."));
+				buffer = new Buffer(0);
+				if(endError)
+					it.callback(endError);
+				else if(it.strict)
+					it.callback(new Error("Stream has ended before the requested number of bytes was sent."));
+				else
+					it.callback(null, bufferBkp);
 			}
 			else
 				break;
 		}
-	};
+	}
 	
-	if(!usingBuffer)
-	{
-		stream.on("data", function(data) {
-			buffer = Buffer.concat([ buffer, data ]);
-			
-			checkRead();
-		});
-		stream.on("end", function(data) {
-			ended = true;
-			
-			checkRead();
-		});
+	function sendData(data) {
+		buffer = Buffer.concat([ buffer, data ]);
+		checkRead();
+	}
+	
+	function sendDataAtStart(data) {
+		buffer = Buffer.concat([ data, buffer ]);
+		checkRead();
+	}
+	
+	function endData(error) {
+		ended = true;
+		endError = error;
+		
+		checkRead();
 	}
 	
 	/**
@@ -60,10 +94,15 @@ module.exports = function(stream) {
 	 * end, then passing the full content to the function.
 	 * 
 	 * If the stream ends before the requested number of bytes is available, the callback function will be called with an error
-	 * message.
+	 * message, except if the strict parameter is set to false, in which case the callback function will be called with the
+	 * available amount of bytes.
+	 * 
+	 * @param bytes {Number}
+	 * @param callback {Function}
+	 * @param strict {Boolean} Optional, defaults to true.
 	*/
-	this.read = function(bytes, callback) {
-		wantToRead.push({ bytes: bytes, callback: callback });
+	function read(bytes, callback, strict) {
+		wantToRead.push({ bytes: bytes, callback: callback, strict: (strict === undefined || strict === null ? true : strict) });
 		checkRead();
 	};
 }

@@ -10,4 +10,5 @@ function decodeKeyFormat(keyBinary, callback) {
 	callback(null, gpg.stdout);
 }
 
+
 exports.decodeKeyFormat = decodeKeyFormat;
