@@ -44,11 +44,10 @@ function verifyXYSignature(callback, keyBody, signatureBody, issuerKeyBody, subO
 	var buffers = [ ];
 	buffers.push(packets.generatePacket(consts.PKT.PUBLIC_KEY, keyBody));
 	if(subObjectBody)
-		buffers.push(packets.generatePacket(subObjectType, keyBody));
-	buffers.push(packets.generatePacket(consts.PKT.SIGNATURE, keyBody));
+		buffers.push(packets.generatePacket(subObjectType, subObjectBody));
+	buffers.push(packets.generatePacket(consts.PKT.SIGNATURE, signatureBody));
 	if(issuerKeyBody)
-		buffers.push(packets.generatePacket(consts.PKT.PUBLIC_KEY, keyBody));
-	
+		buffers.push(packets.generatePacket(consts.PKT.PUBLIC_KEY, isserKeyBody));
 	verifySignature(Buffer.concat(buffers), callback);
 }
 

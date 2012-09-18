@@ -405,7 +405,7 @@ exports.newHeaders = function(test) {
 };
 
 exports.key1 = function(test) {
-	test.expect(28);
+	test.expect(27);
 	
 	var key = null, id = null, sig = null;
 
