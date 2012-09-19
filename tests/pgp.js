@@ -477,18 +477,18 @@ exports.base64 = function(test) {
 	
 	var stream = pgp.basicTypes.getBase64EncodingStream(pgp.basicTypes.getBase64DecodingStream(data1));
 	
-	stream.read(-1, function(err, data) {
+	stream.readUntilEnd(function(err, data) {
 		test.ifError(err);
 		
 		test.equals(data1.replace(/\s/g, ""), data.toString("utf8").replace(/\s/g, ""));
 		
 		stream = pgp.basicTypes.getBase64EncodingStream(pgp.basicTypes.getBase64DecodingStream(data1, 4));
-		stream.read(-1, function(err, data) {
+		stream.readUntilEnd(function(err, data) {
 			test.ifError(err);
 			
 			test.equals(data1.replace(/\s/g, ""), data.toString("utf8").replace(/\s/g, ""));
 			stream = pgp.basicTypes.getBase64EncodingStream(pgp.basicTypes.getBase64DecodingStream(data1, 20));
-			stream.read(-1, function(err, data) {
+			stream.readUntilEnd(function(err, data) {
 				test.ifError(err);
 				
 				test.equals(data1.replace(/\s/g, ""), data.toString("utf8").replace(/\s/g, ""));
@@ -498,3 +498,22 @@ exports.base64 = function(test) {
 		});
 	});
 };
+
+exports.dearmor = function(test) {
+	test.expect(2);
+	pgp.formats.dearmor(TESTKEY2).readUntilEnd(function(err, data) {
+		test.ifError(err);
+		test.equals(data.length, 15968);
+		test.done();
+	});
+};
+
+/*exports.key2 = function(test) {
+	test.expect(29);
+	pgp.packets.gpgsplit(pgp.formats.dearmor(TESTKEY2), function(err, tag, header, body, next) {
+		test.ifError(err);
+		next();
+	}, function() {
+		test.done();
+	});
+};*/

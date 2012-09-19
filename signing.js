@@ -20,7 +20,7 @@ function verifySignature(keyring, callback) {
 					if(err) { callback(err); return; }
 
 					var gpg = child_process.spawn(config.gpg, [ "--with-colons", "--no-default-keyring", "--keyring", fname, "--check-sigs" ]);
-					new BufferedStream(gpg.stdout).read(-1, function(err, stdout) {
+					new BufferedStream(gpg.stdout).readUntilEnd(function(err, stdout) {
 						if(err) { callback(err); return; }
 						
 						stdout = stdout.toString("utf8");

@@ -179,6 +179,15 @@ function gpgsplit(data, callback, callbackEnd) {
 						readon();
 					});
 				}
+				else if(packetLength == null) // Body goes until EOF
+				{
+					data.readUntilEnd(function(err, body) {
+						if(err)
+							callback(err);
+						else
+							callback(null, tag, header, body, readPacket);
+					});
+				}
 				else
 				{
 					data.read(packetLength === null ? -1 : packetLength, function(err, body) {

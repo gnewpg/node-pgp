@@ -1,3 +1,5 @@
+var utils = require("./utils");
+
 /**
  * Buffers the output of a readable stream and makes it readable in a predictable manner.
  * 
@@ -13,6 +15,8 @@ module.exports = function(stream) {
 	this._sendDataAtStart = sendDataAtStart;
 	this._endData = endData;
 	this.read = read;
+	this.readUntilEnd = readUntilEnd;
+	this.readLine = readLine;
 
 	if(stream instanceof Buffer)
 	{
@@ -39,16 +43,14 @@ module.exports = function(stream) {
 		{
 			var it = wantToRead[0];
 			var bufferBkp = buffer;
-			if(it.bytes == -1 && ended)
+			var nlidx;
+			if(it.bytes == -2 && (nlidx = utils.indexOf(buffer, 10)) != -1)
 			{
-				wantToRead.shift();      // We need to do this first as the callback
-				buffer = new Buffer(0);  // function might call checkRead()
-				if(endError)
-					it.callback(endError);
-				else
-					it.callback(null, bufferBkp);
+				wantToRead.shift();
+				buffer = buffer.slice(nlidx+1);
+				it.callback(null, bufferBkp.slice(0, nlidx+1));
 			}
-			else if(it.bytes != -1 && buffer.length >= it.bytes)
+			else if(it.bytes >= 0 && buffer.length >= it.bytes)
 			{
 				wantToRead.shift();
 				buffer = buffer.slice(it.bytes);
@@ -104,5 +106,13 @@ module.exports = function(stream) {
 	function read(bytes, callback, strict) {
 		wantToRead.push({ bytes: bytes, callback: callback, strict: (strict === undefined || strict === null ? true : strict) });
 		checkRead();
+	};
+	
+	function readUntilEnd(callback) {
+		read(-1, callback, false);
+	};
+	
+	function readLine(callback) {
+		read(-2, callback, false);
 	};
 }

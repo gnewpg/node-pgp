@@ -159,7 +159,7 @@ function getAttributePacketInfo(body, callback)
 				
 				ret.subPackets.push(getAttributeSubPacketInfo(subPacket.readUInt8(0), subPacket.slice(1)));
 				readon();
-			})
+			});
 		});
 	};
 	readon();

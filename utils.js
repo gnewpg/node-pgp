@@ -31,5 +31,16 @@ function hash(data, algo, toFormat)
 	return ret.digest(toFormat);
 }
 
+function indexOf(buffer, charCode)
+{
+	for(var i=0; i<buffer.length; i++)
+	{
+		if(buffer.readUInt8(i) == charCode)
+			return i;
+	}
+	return -1;
+}
+
 exports.getTempFilename = getTempFilename;
 exports.hash = hash;
+exports.indexOf = indexOf;

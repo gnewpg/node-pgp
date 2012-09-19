@@ -195,23 +195,43 @@ function getBase64DecodingStream(input)
 				return;
 			}
 			
-			var dataStr = leftover + data.toString("utf8").replace(/\s/g, "");
+			var dataStr = leftover + data.toString("utf8");
+			
+			// The whitespace removal is a bit complicated. Inside the base64 stream, we have to remove all
+			// whitespaces, but we do not want to damage the data that comes after it, so we cannot just remove
+			// all whitespaces from data.
 
 			var eq = dataStr.indexOf("=");
 			if(eq != -1)
 			{
-				// An equal sign means the end of the base64 stream. The equal sign could either be the end padding or the start of the CRC checksum. The
-				// only indicator is that the CRC checksum will start at a position that is dividable by 4.
+				// After the base64 stream there comes an equal sign and then 4 bytes of a base64-encoded checksum.
+				// Unfortunately, an equal sign is also used as padding at the end of the base64 stream. The only way
+				// to distinguish is that the length of a base64 stream has to be dividable by 4, so an equal sign whose
+				// position is dividable by 4 is the checksum sign, otherwise it is a padding sign.
+
+				// It is safe to remove all whitespaces before the first equal sign. Then we can calculate where the
+				// base64 stream ends (which is the first position from the equal sign on that is dividable by 4).
+				dataStr = dataStr.substring(0, eq).replace(/\s/g, "") + dataStr.substring(eq);
+				eq = dataStr.indexOf("=");
+
 				var streamEnd = (eq % 4 ? eq + 4 - eq % 4 : eq);
 				if(streamEnd > dataStr.length) // There are still some equal signs to come so we can wait until the next round
 					eq = -1;
 				else
 				{
+					// Now we remove all remaining whitespaces that are after the equal sign but still inside the base64 stream.
+					// As the removing of whitespaces might bring new whitespaces from further right, we do this in a loop.
+					// We also remove all whitespaces directly after the base64 stream (thus the +1)
+					while(dataStr.substring(0, streamEnd+1).match(/\s/))
+						dataStr = dataStr.substring(0, streamEnd+1).replace(/\s/g, "") + dataStr.substring(streamEnd+1);
+
 					// We push the additional data back to the stream
 					input._sendDataAtStart(new Buffer(dataStr.substring(streamEnd), "utf8"));
 					dataStr = dataStr.substring(0, streamEnd);
 				}
 			}
+			if(eq == -1) // Also if eq was set to -1 manually
+				dataStr = dataStr.replace(/\s/g, "");
 			
 			if(dataStr.length % 4) // base64 chunk has to be dividable by 4. Note that
 			{                      // it always is in case we detected an equal sign and eq != -1
