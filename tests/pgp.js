@@ -400,7 +400,7 @@ exports.key1 = function(test) {
 	readNext();
 	
 	function readNext() {
-		split.next(function(err, tag, header, body, next) {
+		split.next(function(err, tag, header, body) {
 			if(err === true)
 			{
 				end();
@@ -508,12 +508,21 @@ exports.dearmor = function(test) {
 	});
 };
 
-/*exports.key2 = function(test) {
+exports.key2 = function(test) {
 	test.expect(29);
-	pgp.packets.gpgsplit(pgp.formats.dearmor(TESTKEY2), function(err, tag, header, body, next) {
-		test.ifError(err);
-		next();
-	}, function() {
-		test.done();
-	});
-};*/
+	var split = pgp.packets.gpgsplit(pgp.formats.dearmor(TESTKEY2));
+	next();
+
+	function next() {
+		split.next(function(err, tag, header, body) {
+			if(err === true)
+			{
+				test.done();
+				return;
+			}
+			
+			test.ifError(err);
+			next();
+		});
+	}
+};
