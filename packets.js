@@ -1,5 +1,6 @@
 var BufferedStream = require("./bufferedStream");
-var basicTypes = require("./basicTypes")
+var basicTypes = require("./basicTypes");
+var Fifo = require("./fifo");
 
 /**
  * Extracts the information of an OpenPGP packet header.
@@ -39,7 +40,7 @@ function getHeaderInfo(data, callback)
 					else
 					{
 						header = Buffer.concat([ header, binary ]);
-						callback(null, tag, number, header);
+						callback(null, tag, number, header, true);
 					}
 				});
 			}
@@ -54,7 +55,7 @@ function getHeaderInfo(data, callback)
 					case 3: headerLength = 1; break;
 				}
 				if(headerLength == 1) // Packet length until EOF
-					callback(null, tag, null, header);
+					callback(null, tag, null, header, false);
 				else
 				{
 					data.read(headerLength-1, function(err, data2) {
@@ -70,7 +71,7 @@ function getHeaderInfo(data, callback)
 								case 3: packetLength = data2.readUInt16BE(0); break;
 								case 5: packetLength = data2.readUInt32BE(0); break;
 							}
-							callback(null, tag, packetLength, header);
+							callback(null, tag, packetLength, header, false);
 						}
 					});
 				}
@@ -79,44 +80,46 @@ function getHeaderInfo(data, callback)
 	});
 }
 
-function generateOldHeader(tag, packetLength)
+function generateHeader(tag, packetLength, newFormat)
 {
-	var buffer;
-	var lengthTag;
-	if(packetLength <= 0xFF)
+	if(newFormat)
 	{
-		buffer = new Buffer(2);
-		buffer.writeUInt8(packetLength, 1);
-		lengthTag = 0;
-	}
-	else if(packetLength <= 0xFFFF)
-	{
-		buffer = new Buffer(3);
-		buffer.writeUInt16BE(packetLength, 1);
-		lengthTag = 1;
+		var number = basicTypes.encode125OctetNumber(packetLength);
+		var ret = Buffer.concat([ new Buffer(1), number ]);
+		ret.writeUInt8(0xC0 | tag, 0); // 0xc0 == 11000000
+		return ret;
 	}
 	else
 	{
-		buffer = new Buffer(5);
-		buffer.writeUInt32BE(packetLength, 1);
-		lengthTag = 2;
+		var buffer;
+		var lengthTag;
+		if(packetLength <= 0xFF)
+		{
+			buffer = new Buffer(2);
+			buffer.writeUInt8(packetLength, 1);
+			lengthTag = 0;
+		}
+		else if(packetLength <= 0xFFFF)
+		{
+			buffer = new Buffer(3);
+			buffer.writeUInt16BE(packetLength, 1);
+			lengthTag = 1;
+		}
+		else
+		{
+			buffer = new Buffer(5);
+			buffer.writeUInt32BE(packetLength, 1);
+			lengthTag = 2;
+		}
+
+		buffer.writeUInt8(0x80 | (tag << 2) | lengthTag, 0);
+		return buffer;
 	}
-
-	buffer.writeUInt8(0x80 | (tag << 2) | lengthTag, 0);
-	return buffer;
 }
 
-function generateNewHeader(tag, packetLength)
+function generatePacket(tag, body, newHeaderFormat)
 {
-	var number = basicTypes.encode125OctetNumber(packetLength);
-	var ret = Buffer.concat([ new Buffer(1), number ]);
-	ret.writeUInt8(0xC0 | tag, 0); // 0xc0 == 11000000
-	return ret;
-}
-
-function generatePacket(tag, body, useOldHeader)
-{
-	var header = (useOldHeader ? generateOldHeader : generateNewHeader)(tag, body.length);
+	var header = generateHeader(tag, body.length, newHeaderFormat);
 	var ret = new Buffer(header.length+body.length);
 	header.copy(ret);
 	body.copy(ret, header.length);
@@ -124,28 +127,31 @@ function generatePacket(tag, body, useOldHeader)
 }
 
 /**
- * Splits an OpenPGP message into its packets. If any of the packets contains partial body length headers, it will be converted to a package with a fixed length.
+ * Splits an OpenPGP message into its packets. If any of the packets contains partial body length headers,
+ * it will be converted to a package with a fixed length.
+ * 
+ * 
  * 
  * @param data {BufferedStream|Reading Stream|Buffer|String}
- * @param callback {Function} function(error, tag, header, body, next), where tag is the packet type, header the binary
- *                            data of the header and body the binary body data. The callback function will be called
- *                            once for each packet. It will only proceed to the next package when the next() function is called.
- *                            This is important, as the order of the packets is important and one should be able to use asynchronous
- *                            code in the callback function.
- * @param callbackEnd {Function} THis function is called when the callback function for the last packet calls next()
+ * @return {Fifo} Returns a Fifo object. callback methods receiving data via Fifo.next() will receive the following arguments apart from the error:
+ *                - The packet type (one of consts.PKT)
+ *                - The packet header (as a Buffer object)
+ *                - The packet body (as a Buffer object)
 */
-function gpgsplit(data, callback, callbackEnd) {
+function gpgsplit(data) {
 	if(!(data instanceof BufferedStream))
 		data = new BufferedStream(data);
+	
+	var ret = new Fifo();
 
 	var readPacket = function() {
-		getHeaderInfo(data, function(err, tag, packetLength, header) {
+		getHeaderInfo(data, function(err, tag, packetLength, header, newFormat) {
 			if(err)
 			{
 				if(!err.NOFIRSTBYTE) // If NOFIRSTBYTE is true, we have reached the end of the stream
-					callback(err);
+					ret._end(err);
 				else
-					callbackEnd();
+					ret._end();
 			}
 			else
 			{
@@ -155,12 +161,12 @@ function gpgsplit(data, callback, callbackEnd) {
 						var readon = function() {
 							basicTypes.read125OctetNumber(data, function(err, length) {
 								if(err)
-									callback(err);
+									ret._end(err);
 								else
 								{
 									data.read(Math.abs(length), function(err, part) {
 										if(err)
-											callback(err);
+											ret._end(err);
 										else
 										{
 											body = Buffer.concat(body, part);
@@ -168,8 +174,9 @@ function gpgsplit(data, callback, callbackEnd) {
 												readon();
 											else
 											{
-												header = generateHeader(tag, body.length);
-												callback(null, tag, header, body, readPacket);
+												header = generateHeader(tag, body.length, newFormat);
+												ret._add(tag, header, body);
+												readPacket();
 											}
 										}
 									});
@@ -183,18 +190,24 @@ function gpgsplit(data, callback, callbackEnd) {
 				{
 					data.readUntilEnd(function(err, body) {
 						if(err)
-							callback(err);
+							ret._end(err);
 						else
-							callback(null, tag, header, body, readPacket);
+						{
+							ret._add(tag, generateHeader(tag, body.length, newFormat), body);
+							readPacket();
+						}
 					});
 				}
 				else
 				{
 					data.read(packetLength === null ? -1 : packetLength, function(err, body) {
 						if(err)
-							callback(err);
+							ret._end(err);
 						else
-							callback(null, tag, header, body, readPacket);
+						{
+							ret._add(tag, header, body);
+							readPacket();
+						}
 					});
 				}
 			}
@@ -202,10 +215,10 @@ function gpgsplit(data, callback, callbackEnd) {
 	};
 
 	readPacket();
+	return ret;
 }
 
 exports.getHeaderInfo = getHeaderInfo;
-exports.generateOldHeader = generateOldHeader;
-exports.generateNewHeader = generateNewHeader;
+exports.generateHeader = generateHeader;
 exports.generatePacket = generatePacket;
 exports.gpgsplit = gpgsplit;

@@ -370,37 +370,24 @@ exports.test125Octets = function(test) {
 	test.done();
 };
 
-exports.oldHeaders = function(test) {
+exports.headers = function(test) {
 	var tag = 10;
 	var bodyLengths = [ 0 , 10, 112, 192, 2051, 8383, 8384, 9102134 ];
-	test.expect(bodyLengths.length*4);
-	bodyLengths.forEach(function(it) {
-		var header = pgp.packets.generateOldHeader(tag, it);
-		pgp.packets.getHeaderInfo(header, function(err, tag1, packetLength, header1) {
-			test.ifError(err);
-			
-			test.equals(tag1, tag);
-			test.equals(packetLength, it);
-			test.equals(header1.toString(), header.toString());
-		});
-	});
-	test.done();
-};
+	test.expect(bodyLengths.length*8);
 
-exports.newHeaders = function(test) {
-	var tag = 10;
-	var bodyLengths = [ 0 , 10, 112, 192, 2051, 8383, 8384, 9102134 ];
-	test.expect(bodyLengths.length*4);
-	bodyLengths.forEach(function(it) {
-		var header = pgp.packets.generateNewHeader(tag, it);
-		pgp.packets.getHeaderInfo(header, function(err, tag1, packetLength, header1) {
-			test.ifError(err);
-			
-			test.equals(tag1, tag);
-			test.equals(packetLength, it);
-			test.equals(header1.toString(), header.toString());
+	[ false, true ].forEach(function(newHeaders) {
+		bodyLengths.forEach(function(it) {
+			var header = pgp.packets.generateHeader(tag, it, newHeaders);
+			pgp.packets.getHeaderInfo(header, function(err, tag1, packetLength, header1) {
+				test.ifError(err);
+				
+				test.equals(tag1, tag);
+				test.equals(packetLength, it);
+				test.equals(header1.toString(), header.toString());
+			});
 		});
 	});
+	
 	test.done();
 };
 
@@ -409,18 +396,31 @@ exports.key1 = function(test) {
 	
 	var key = null, id = null, sig = null;
 
-	pgp.packets.gpgsplit(new Buffer(TESTKEY1, "binary"), function(err, tag, header, body, next) {
-		test.ifError(err);
-		
-		if(key == null)
-			key = body;
-		else if(id == null)
-			id = body;
-		else
-			sig = body;
+	var split = pgp.packets.gpgsplit(new Buffer(TESTKEY1, "binary"));
+	readNext();
+	
+	function readNext() {
+		split.next(function(err, tag, header, body, next) {
+			if(err === true)
+			{
+				end();
+				return;
+			}
 
-		next();
-	}, function() {
+			test.ifError(err);
+			
+			if(key == null)
+				key = body;
+			else if(id == null)
+				id = body;
+			else
+				sig = body;
+
+			readNext();
+		});
+	}
+	
+	function end() {
 		pgp.packetContent.getPublicKeyPacketInfo(key, function(err, info) {
 			test.ifError(err);
 
@@ -467,7 +467,7 @@ exports.key1 = function(test) {
 				});
 			});
 		});
-	});
+	}
 };
 
 exports.base64 = function(test) {

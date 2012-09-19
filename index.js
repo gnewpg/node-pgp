@@ -6,5 +6,6 @@ module.exports = {
 	packets : require("./packets"),
 	signing : require("./signing"),
 	consts : require("./consts"),
-	config : require("./config")
+	config : require("./config"),
+	Fifo : require("./fifo")
 };
