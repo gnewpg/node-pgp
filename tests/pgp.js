@@ -396,7 +396,7 @@ exports.key1 = function(test) {
 	
 	var key = null, id = null, sig = null;
 
-	var split = pgp.packets.gpgsplit(new Buffer(TESTKEY1, "binary"));
+	var split = pgp.packets.splitPackets(new Buffer(TESTKEY1, "binary"));
 	readNext();
 	
 	function readNext() {
@@ -510,7 +510,7 @@ exports.dearmor = function(test) {
 
 exports.key2 = function(test) {
 	test.expect(29);
-	var split = pgp.packets.gpgsplit(pgp.formats.dearmor(TESTKEY2));
+	var split = pgp.packets.splitPackets(pgp.formats.dearmor(TESTKEY2));
 	next();
 
 	function next() {

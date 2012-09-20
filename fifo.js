@@ -5,6 +5,8 @@ module.exports = function() {
 	var endedError = null;
 	
 	this._add = add;
+	this._addAllMulti = addAllMulti;
+	this._addAllSingle = addAllSingle;
 	this._end = end;
 	this.next = next;
 	
@@ -25,6 +27,24 @@ module.exports = function() {
 			args.push(arguments[i]); // arguments is not a true array
 		items.push(args);
 		check();
+	}
+	
+	/**
+	 * Adds all the values from the items array. items is an array of arrays, and each array in it is an array of arguments to pass to the next()
+	 * callback function.
+	*/
+	function addAllMulti(items) {
+		items = items.concat(items);
+	}
+	
+	/**
+	 * Adds all the values from the items array. items is an array of objects that will be passed as first parameter to the next() callback
+	 * function.
+	*/
+	function addAllSingle(items) {
+		items.forEach(function(it) {
+			items.push([ it ]);
+		});
 	}
 	
 	function end(error) {

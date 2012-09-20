@@ -93,7 +93,7 @@ function getPublicKeyPacketInfo(body, callback)
 
 function getPublicSubkeyPacketInfo(body, callback)
 {
-	extractPublicKeyInfo(body, function(err, info) {
+	getPublicKeyInfo(body, function(err, info) {
 		if(err) { callback(err); return; }
 		
 		info.pkt = consts.PKT.PUBLIC_SUBKEY;
@@ -135,7 +135,7 @@ function getAttributePacketInfo(body, callback)
 {
 	var ret = {
 		pkt : consts.PKT.ATTRIBUTE,
-		id : utils.hash(body, "sha1", "hex").toUpperCase(),
+		id : utils.hash(body, "sha1", "base64").substring(0, 27),
 		signatures : [ ],
 		subPackets : [ ],
 		binary : body
@@ -184,7 +184,8 @@ function getSignaturePacketInfo(body, callback)
 {
 	var ret = {
 		pkt : consts.PKT.SIGNATURE,
-		type : null,
+		id : utils.hash(body, "sha1", "base64").substring(0, 27),
+		sigtype : null,
 		date : null,
 		issuer : null,
 		pkalgo : null,
@@ -207,7 +208,7 @@ function getSignaturePacketInfo(body, callback)
 		var hashedLength = body.readUInt8(1); // Must be 5 according to spec
 		ret.hashedPart = body.slice(2, 2+hashedLength);
 
-		ret.type = ret.hashedPart.readUInt8(0);
+		ret.sigtype = ret.hashedPart.readUInt8(0);
 		ret.date = new Date(ret.hashedPart.readUInt32BE(1));
 		
 		var rest = body.slice(2+hashedLength);
@@ -224,7 +225,7 @@ function getSignaturePacketInfo(body, callback)
 	}
 	else if(byte1 == 4)
 	{ // Version 4 signature
-		ret.type = body.readUInt8(1);
+		ret.sigtype = body.readUInt8(1);
 		ret.pkalgo = body.readUInt8(2);
 		ret.hashalgo = body.readUInt8(3);
 		ret.version = 4;
@@ -256,13 +257,6 @@ function getSignaturePacketInfo(body, callback)
 					ret.issuer = ret.unhashedSubPackets[consts.SIGSUBPKT.ISSUER][0].value;
 				if(ret.hashedSubPackets[consts.SIGSUBPKT.EXPORTABLE] && !ret.hashedSubPackets[consts.SIGSUBPKT.EXPORTABLE][0].value)
 					ret.exportable = false;
-				else if(ret.hashedSubPackets[consts.SIGSUBPKT.REV_KEY])
-				{
-					ret.hashedSubPackets[consts.SIGSUBPKT.REV_KEY].forEach(function(it) {
-						if(it.value.sensitive)
-							ret.exportable = false;
-					});
-				}
 				if(ret.hashedSubPackets[consts.SIGSUBPKT.SIG_EXPIRE] && ret.date)
 					ret.expires = ret.date.getTime() + (ret.hashedSubPackets[consts.SIGSUBPKT.SIG_EXPIRE][0].value*1000);
 

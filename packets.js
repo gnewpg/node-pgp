@@ -138,7 +138,7 @@ function generatePacket(tag, body, newHeaderFormat)
  *                - The packet header (as a Buffer object)
  *                - The packet body (as a Buffer object)
 */
-function gpgsplit(data) {
+function splitPackets(data) {
 	if(!(data instanceof BufferedStream))
 		data = new BufferedStream(data);
 	
@@ -221,4 +221,4 @@ function gpgsplit(data) {
 exports.getHeaderInfo = getHeaderInfo;
 exports.generateHeader = generateHeader;
 exports.generatePacket = generatePacket;
-exports.gpgsplit = gpgsplit;
+exports.splitPackets = splitPackets;
