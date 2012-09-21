@@ -2,14 +2,30 @@ var child_process = require("child_process");
 var BufferedStream = require("./bufferedStream");
 var basicTypes = require("./basicTypes");
 
-function decodeKeyFormat(keyBinary, callback) {
-	var gpg = child_process.spawn(config.gpg, [ '--dearmor' ]);
-	var error = false;
-
-	gpg.stdin.write(keyBinary);
-	gpg.stdin.end();
+/**
+ * Decodes different key input formats.
+ * @param input {BufferedStream|Buffer|Stream} The input data
+ * @return {BufferedStream}
+*/
+function decodeKeyFormat(input) {
+	if(!(input instanceof BufferedStream))
+		input = new BufferedStream(input);
 	
-	callback(null, gpg.stdout);
+	var ret = new BufferedStream();
+	var input2 = null;
+	
+	input.readLine(function(err, data) {
+		if(err) { ret._endData(err); return; }
+
+		input._sendDataAtStart(data);
+
+		if(data.toString("utf8").match(/^-----BEGIN PGP /))
+			dearmor(input).pipe(ret);
+		else
+			input.pipe(ret);
+	});
+
+	return ret;
 }
 
 function dearmor(input) {

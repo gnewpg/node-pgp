@@ -499,12 +499,19 @@ exports.base64 = function(test) {
 	});
 };
 
-exports.dearmor = function(test) {
-	test.expect(2);
-	pgp.formats.dearmor(TESTKEY2).readUntilEnd(function(err, data) {
+exports.decodeKeyFormat = function(test) {
+	test.expect(4);
+	
+	pgp.formats.decodeKeyFormat(TESTKEY2).readUntilEnd(function(err, data) {
 		test.ifError(err);
-		test.equals(data.length, 15968);
-		test.done();
+		test.equals(pgp.utils.hash(data, "sha1", "base64"), "W/c5mHH2N/MTxMXIMUIm11VtYLE=");
+		
+		pgp.formats.decodeKeyFormat(TESTKEY1).readUntilEnd(function(err, data) {
+			test.ifError(err);
+			test.equals(pgp.utils.hash(data, "sha1", "base64"), "nUf/XAd/Id/kpJ/aX62rlvYU9/s=");
+			
+			test.done();
+		});
 	});
 };
 

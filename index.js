@@ -7,5 +7,6 @@ module.exports = {
 	signing : require("./signing"),
 	consts : require("./consts"),
 	config : require("./config"),
-	Fifo : require("./fifo")
+	Fifo : require("./fifo"),
+	utils : require("./utils")
 };

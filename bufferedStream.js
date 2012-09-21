@@ -17,6 +17,8 @@ module.exports = function(stream) {
 	this.read = read;
 	this.readUntilEnd = readUntilEnd;
 	this.readLine = readLine;
+	this.readArbitrary = readArbitrary;
+	this.pipe = pipe;
 
 	if(stream instanceof Buffer)
 	{
@@ -44,7 +46,13 @@ module.exports = function(stream) {
 			var it = wantToRead[0];
 			var bufferBkp = buffer;
 			var nlidx;
-			if(it.bytes == -2 && (nlidx = utils.indexOf(buffer, 10)) != -1)
+			if(it.bytes == -3 && buffer.length > 0)
+			{
+				wantToRead.shift();
+				buffer = new Buffer(0);
+				it.callback(null, bufferBkp);
+			}
+			else if(it.bytes == -2 && (nlidx = utils.indexOf(buffer, 10)) != -1)
 			{
 				wantToRead.shift();
 				buffer = buffer.slice(nlidx+1);
@@ -91,9 +99,7 @@ module.exports = function(stream) {
 	
 	/**
 	 * The callback function is called as soon as the specified number of bytes is available, receiving a possible error
-	 * message as first argument or a Buffer object with the exact specified amount of bytes as second argument. If the
-	 * bytes parameter is set to -1, the callback function will only be called when the readable stream has reached its
-	 * end, then passing the full content to the function.
+	 * message as first argument or a Buffer object with the exact specified amount of bytes as second argument.
 	 * 
 	 * If the stream ends before the requested number of bytes is available, the callback function will be called with an error
 	 * message, except if the strict parameter is set to false, in which case the callback function will be called with the
@@ -108,11 +114,42 @@ module.exports = function(stream) {
 		checkRead();
 	};
 	
+	/**
+	 * Calls the callback function exactly once: When EOF is reached with the full content or in case of an error with the error object.
+	*/
 	function readUntilEnd(callback) {
 		read(-1, callback, false);
 	};
 	
+	/**
+	 * Reads a line from the stream. The linebreak is also returned (except on the last line). When an empty Buffer is passed to the callback
+	 * function, this indicates that the stream has ended.
+	*/
 	function readLine(callback) {
 		read(-2, callback, false);
 	};
+	
+	/**
+	 * Calls the callback function with new data as soon as it is available. When an empty Buffer is passed, this means that the stream has ended.
+	*/
+	function readArbitrary(callback) {
+		read(-3, callback, false);
+	}
+	
+	/**
+	 * Sends all data to the specified other BufferedStream.
+	*/
+	function pipe(otherStream) {
+		readArbitrary(function(err, data) {
+			if(err)
+				otherStream._endData(err);
+			else if(data.length == 0)
+				otherStream._endData();
+			else
+			{
+				otherStream._sendData(data);
+				pipe(otherStream);
+			}
+		});
+	}
 }
