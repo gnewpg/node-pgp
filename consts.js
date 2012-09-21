@@ -67,7 +67,7 @@ exports.SIGSUBPKT = {
 	SIGNERS_UID   : 28, /* Signer's user id. */
 	REVOC_REASON  : 29, /* Reason for revocation. */
 	FEATURES      : 30, /* Feature flags. */
-
+	SIGTARGET     : 31, /* Signature target */
 	SIGNATURE     : 32, /* Embedded signature. */
 
 	FLAG_CRITICAL : 128
