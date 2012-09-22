@@ -4,7 +4,7 @@ var basicTypes = require("./basicTypes");
 
 /**
  * Decodes different key input formats.
- * @param input {BufferedStream|Buffer|Stream} The input data
+ * @param input {BufferedStream|Buffer|Stream|Readable Stream} The input data
  * @return {BufferedStream}
 */
 function decodeKeyFormat(input) {
