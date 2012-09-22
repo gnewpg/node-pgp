@@ -93,7 +93,7 @@ function getPublicKeyPacketInfo(body, callback)
 
 function getPublicSubkeyPacketInfo(body, callback)
 {
-	getPublicKeyInfo(body, function(err, info) {
+	getPublicKeyPacketInfo(body, function(err, info) {
 		if(err) { callback(err); return; }
 		
 		info.pkt = consts.PKT.PUBLIC_SUBKEY;

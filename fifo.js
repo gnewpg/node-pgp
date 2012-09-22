@@ -35,6 +35,7 @@ module.exports = function() {
 	*/
 	function addAllMulti(items) {
 		items = items.concat(items);
+		check();
 	}
 	
 	/**
@@ -45,6 +46,7 @@ module.exports = function() {
 		items.forEach(function(it) {
 			items.push([ it ]);
 		});
+		check();
 	}
 	
 	function end(error) {

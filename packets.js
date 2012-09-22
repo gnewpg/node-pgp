@@ -143,8 +143,10 @@ function splitPackets(data) {
 		data = new BufferedStream(data);
 	
 	var ret = new Fifo();
+	readPacket();
+	return ret;
 
-	var readPacket = function() {
+	function readPacket() {
 		getHeaderInfo(data, function(err, tag, packetLength, header, newFormat) {
 			if(err)
 			{
@@ -213,9 +215,6 @@ function splitPackets(data) {
 			}
 		});
 	};
-
-	readPacket();
-	return ret;
 }
 
 exports.getHeaderInfo = getHeaderInfo;
