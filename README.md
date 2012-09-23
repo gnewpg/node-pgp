@@ -5,7 +5,7 @@ JavaScript OpenPGP implementation following
 This page describes what is supported already.
 
 Functions
-#########
+=========
 
 PGP data
 --------
@@ -175,7 +175,7 @@ function receives the following info object:
 * `signature`: A Buffer object with the actual signature part of the signature
 
 Concepts
-######==
+========
 
 Types
 -----
@@ -190,7 +190,7 @@ following methods can be used to read content from the stream. Note that all
 of them only read a , you can
 use the following methods to read its content:
 
-###= read(bytes, callback, strict) ###=
+#### read(bytes, callback, strict) ####
 
 Reads the specified number of bytes from the stream. If `strict` is set to true
 (which is the default value), an error is produced when the stream ends before
@@ -212,7 +212,7 @@ returned a reduced number of bytes containing the rest of the stream.
 		else
 			; // data.length == 5
 
-###= readUntilEnd(callback) ###=
+#### readUntilEnd(callback) ####
 
 Waits until the stream has ended and then calls the callback function with the
 whole amount of data.
@@ -225,7 +225,7 @@ whole amount of data.
 			; // data contains the whole data
 	});
 
-###= readLine(callback) ###=
+#### readLine(callback) ####
 
 Reads a line from the stream. The line-break is included in the provided data.
 
@@ -239,7 +239,7 @@ Reads a line from the stream. The line-break is included in the provided data.
 			; // data contains a line ended with a line-break
 	});
 
-###= readArbitrary(callback) ###=
+#### readArbitrary(callback) ####
 
 Reads an arbitrary amount of data from the stream, at least 1 byte. All data
 that is currently available in the stream buffer will be passed to the callback
