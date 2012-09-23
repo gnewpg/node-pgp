@@ -31,10 +31,6 @@ function getPublicKeyPacketInfo(body, callback)
 	var ret = {
 		pkt: consts.PKT.PUBLIC_KEY,
 		id: null,
-		subkeys: { },
-		attributes: { },
-		signatures: { },
-		identities: { },
 		binary : body,
 		version : body.readUInt8(0),
 		expires : null,
@@ -126,8 +122,7 @@ function getIdentityPacketInfo(body, callback)
 		email : email,
 		comment : comment,
 		binary : body,
-		id : content,
-		signatures : [ ]
+		id : content
 	});
 }
 
@@ -136,7 +131,6 @@ function getAttributePacketInfo(body, callback)
 	var ret = {
 		pkt : consts.PKT.ATTRIBUTE,
 		id : utils.hash(body, "sha1", "base64").substring(0, 27),
-		signatures : [ ],
 		subPackets : [ ],
 		binary : body
 	};
@@ -192,7 +186,6 @@ function getSignaturePacketInfo(body, callback)
 		hashalgo : null,
 		version : null,
 		binary : body,
-		verified : false,
 		hashedSubPackets : { },
 		unhashedSubPackets : { },
 		exportable : true,

@@ -20,9 +20,9 @@ function decodeKeyFormat(input) {
 		input._sendDataAtStart(data);
 
 		if(data.toString("utf8").match(/^-----BEGIN PGP /))
-			dearmor(input).pipe(ret);
+			dearmor(input)._pipe(ret);
 		else
-			input.pipe(ret);
+			input._pipe(ret);
 	});
 
 	return ret;

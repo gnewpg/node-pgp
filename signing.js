@@ -47,7 +47,7 @@ function verifyXYSignature(callback, keyBody, signatureBody, issuerKeyBody, subO
 		buffers.push(packets.generatePacket(subObjectType, subObjectBody));
 	buffers.push(packets.generatePacket(consts.PKT.SIGNATURE, signatureBody));
 	if(issuerKeyBody)
-		buffers.push(packets.generatePacket(consts.PKT.PUBLIC_KEY, isserKeyBody));
+		buffers.push(packets.generatePacket(consts.PKT.PUBLIC_KEY, issuerKeyBody));
 	verifySignature(Buffer.concat(buffers), callback);
 }
 
@@ -58,7 +58,6 @@ function verifyKeySignature(keyBody, signature, issuerKeyBody, callback) {
 
 function verifySubkeySignature(keyBody, subkeyBody, signature, issuerKeyBody, callback) {
 	verifyXYSignature(callback, keyBody, signature, issuerKeyBody, subkeyBody, consts.PKT.PUBLIC_SUBKEY);
-	
 }
 
 function verifyIdentitySignature(keyBody, idBody, signature, issuerKeyBody, callback) {

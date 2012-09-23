@@ -14,11 +14,11 @@ module.exports = function(stream) {
 	this._sendData = sendData;
 	this._sendDataAtStart = sendDataAtStart;
 	this._endData = endData;
+	this._pipe = pipe;
 	this.read = read;
 	this.readUntilEnd = readUntilEnd;
 	this.readLine = readLine;
 	this.readArbitrary = readArbitrary;
-	this.pipe = pipe;
 
 	if(stream instanceof Buffer)
 	{
