@@ -1,11 +1,11 @@
 This project is work in progress. One day it is supposed to be a native
 JavaScript OpenPGP implementation following 
-(RFC 4880)[http://tools.ietf.org/html/rfc4880].
+[RFC 4880](http://tools.ietf.org/html/rfc4880).
 
 This page describes what is supported already.
 
 Functions
-=========
+#########
 
 PGP data
 --------
@@ -13,7 +13,7 @@ PGP data
 OpenPGP data can come in two different formats: in binary or “ASCII-armored”
 using base-64. These methods allow working with the different formats.
 
-=== formats.decodeKeyFormat(data) ===
+### formats.decodeKeyFormat(data) ###
 
 This method converts the input data to the binary format, automatically
 detecting the format of the input data. `data` can be a Readable Stream, a
@@ -27,7 +27,7 @@ see below how to work with that.
 			; // data is a Buffer with the data in binary format
 	});
 
-=== formats.dearmor(data) ===
+### formats.dearmor(data) ###
 
 Converts the input data from armored ASCII to the binary format. `data` can be
 a Readable Stream, a Buffer, or a String. The function returns a
@@ -48,7 +48,7 @@ OpenPGP data is made of multiple packets, which represent objects like a public
 key, a user ID that belongs to a key, a signature, or even the raw data that is
 being signed. These functions deal with those packets.
 
-=== packets.splitPackets(data) ===
+### packets.splitPackets(data) ###
 
 This method splits OpenPGP data into its packets. `data` can be a Readable
 Stream, a Buffer or a String containing the binary data to split. The method
@@ -58,7 +58,7 @@ returns a [`Fifo`](#fifo) object, see below how to use that.
 	iterate();
 	function iterate() {
 		split.next(function(err, type, header, body) {
-			if(err === true)
+			if(err ### true)
 				; // All packets have been processed
 			else if(err)
 				console.warn("An error occurred", err);
@@ -72,7 +72,7 @@ returns a [`Fifo`](#fifo) object, see below how to use that.
 		});
 	}
 
-=== packets.generatePacket(type, body) ===
+### packets.generatePacket(type, body) ###
 
 This method creates a PGP packet. `type` is one of [`consts.PKT`](#packet-type)
 (see below), `body` is a Buffer containing the packet body. The method returns
@@ -85,7 +85,7 @@ a Buffer with the generated packet.
 		pgp.packets.generatePacket(pgp.consts.PKT.SIGNATURE, signatureBody)
 	]);
 
-=== packetContent.getPublicKeyPacketInfo(packetBody, callback) ===
+### packetContent.getPublicKeyPacketInfo(packetBody, callback) ###
 
 This method gets information about a public key packet. `packetBody` is a
 Buffer containing the body of a public key packet. The `callback(err, info)`
@@ -104,12 +104,12 @@ function receives an info object with the following content:
   Algorithm specific, might contain the values `n`, `e`, `p`, `q`, `g` and `y`
 * `fingerprint`: The fingerprint, a 32-digit hex number as upper-case String
 
-=== packetContent.getPublicSubkeyPacketInfo(packetBody, callback) ===
+### packetContent.getPublicSubkeyPacketInfo(packetBody, callback) ###
 
 This method gets information about a public subkey packet. Everything is the
 same as with `getPublicKeyPacketInfo`, only `pkt` is `consts.PKT.PUBLIC_SUBKEY`.
 
-=== packetContent.getIdentityPacketInfo(packetBody, callback) ===
+### packetContent.getIdentityPacketInfo(packetBody, callback) ###
 
 This method gets information about an identity (user ID) packet. `packetBody` is
 a Buffer containing the body of the packet. `callback(err, info)` receives the
@@ -122,7 +122,7 @@ following info object:
 * `binary` : `packetBody`
 * `id` : The whole ID as String
 
-=== packetContent.getAttributePacketInfo(packetBody, callback) ===
+### packetContent.getAttributePacketInfo(packetBody, callback) ###
 
 This method gets information about an attribute packet. Attribute packets
 contain of several sub-packets, which can only be JPEG images.
@@ -140,7 +140,7 @@ contain of several sub-packets, which can only be JPEG images.
 	  type, one of [`consts.IMAGETYPE`](#attribute-sub-packet-image-types)
 	* `binary`: `packetBody`
 
-=== packetContent.getSignaturePacketType(packetBody, callback) ===
+### packetContent.getSignaturePacketType(packetBody, callback) ###
 
 This method gets information about a signature packet. The `callback(err, info)`
 function receives the following info object:
@@ -175,12 +175,12 @@ function receives the following info object:
 * `signature`: A Buffer object with the actual signature part of the signature
 
 Concepts
-========
+######==
 
 Types
 -----
 
-=== BufferedStream ===
+### BufferedStream ###
 
 This class makes reading from a Readable Stream predictable by providing methods
 that ensure that a specified number of bytes is returned at once.
@@ -190,7 +190,7 @@ following methods can be used to read content from the stream. Note that all
 of them only read a , you can
 use the following methods to read its content:
 
-==== read(bytes, callback, strict) ====
+###= read(bytes, callback, strict) ###=
 
 Reads the specified number of bytes from the stream. If `strict` is set to true
 (which is the default value), an error is produced when the stream ends before
@@ -212,7 +212,7 @@ returned a reduced number of bytes containing the rest of the stream.
 		else
 			; // data.length == 5
 
-==== readUntilEnd(callback) ====
+###= readUntilEnd(callback) ###=
 
 Waits until the stream has ended and then calls the callback function with the
 whole amount of data.
@@ -225,7 +225,7 @@ whole amount of data.
 			; // data contains the whole data
 	});
 
-==== readLine(callback) ====
+###= readLine(callback) ###=
 
 Reads a line from the stream. The line-break is included in the provided data.
 
@@ -239,7 +239,7 @@ Reads a line from the stream. The line-break is included in the provided data.
 			; // data contains a line ended with a line-break
 	});
 
-==== readArbitrary(callback) ====
+###= readArbitrary(callback) ###=
 
 Reads an arbitrary amount of data from the stream, at least 1 byte. All data
 that is currently available in the stream buffer will be passed to the callback
@@ -262,7 +262,7 @@ function. This example passes all data from the stream to a writable stream.
 	}
 
 
-=== Fifo ===
+### Fifo ###
 
 Objects of this type represent a queue of items that can be read bit-by-bit
 using the `next` method.
@@ -271,7 +271,7 @@ using the `next` method.
 	readNext();
 	function readNext() {
 		fifo.next(function(err, item) {
-			if(err === true)
+			if(err ### true)
 				; // No items left
 			else if(err)
 				console.log("An error occurred", err);
@@ -288,7 +288,7 @@ using the `next` method.
 Constants
 ---------
 
-=== Packet type ===
+### Packet type ###
 
 `pgp.consts.PKT` contains the numbers representing packet types.
 
@@ -314,7 +314,7 @@ Constants
 	COMMENT       : 61, /* new comment packet (GnuPG specific). */
 	GPG_CONTROL   : 63  /* internal control packet (GnuPG specific). */
 
-=== Signature type ===
+### Signature type ###
 
 `pgp.consts.SIG` contains the numbers representing signature types.
 
@@ -334,7 +334,7 @@ Constants
 	TIMESTAMP     : 0x40, /* Timestamp signature. */
 	THIRDPARTY    : 0x50, /* Third-Party Confirmation signature. */
 
-=== Signature sub-packet type ===
+### Signature sub-packet type ###
 
 `pgp.consts.SIGSUBPKT` contains the numbers representing signature sub-packet
 types.
@@ -367,7 +367,7 @@ types.
 
 	FLAG_CRITICAL : 128
 
-=== Public key algorithm ===
+### Public key algorithm ###
 
 `pgp.consts.PKALGO` contains the numbers representing public key algorithms.
 
@@ -377,7 +377,7 @@ types.
 	ELGAMAL_E     : 16, /* Elgamal (Encrypt-Only) */
 	DSA           : 17 /* DSA (Digital Signature Algorithm) */
 
-=== Hash algorithm ===
+### Hash algorithm ###
 
 `pgp.consts.HASHALGO` contains the numbers representing public key algorithms.
 
@@ -389,14 +389,14 @@ types.
 	SHA512        : 10,
 	SHA224        : 11
 
-=== Attribute sub-packets ===
+### Attribute sub-packets ###
 
 `pgp.consts.ATTRSUBPKT` contains the numbers representing attribute sub-packet
 types.
 
 	IMAGE         : 1
 
-=== Attribute sub-packet image types ===
+### Attribute sub-packet image types ###
 
 `pgp.consts.IMAGETYPE` contains the numbers representing attribute sub-packet
 image types.
