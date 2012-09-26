@@ -1,3 +1,5 @@
+var utils = require("./utils");
+
 module.exports = function() {
 	var listeners = [ ];
 	var items = [ ];
@@ -9,6 +11,7 @@ module.exports = function() {
 	this._addAllSingle = addAllSingle;
 	this._end = end;
 	this.next = next;
+	this.forEach = forEach;
 	
 	function check() {
 		while(items.length > 0 && listeners.length > 0)
@@ -58,5 +61,30 @@ module.exports = function() {
 	function next(callback) {
 		listeners.push(callback);
 		check();
+	}
+
+	function forEach(iterator, callback) {
+		handleNextItem();
+
+		function handleNextItem() {
+			next(function(err) {
+				if(err === true)
+					callback(null);
+				else if(err)
+					callback(err);
+				else
+				{
+					var args = utils.toProperArray(arguments);
+					args.shift();
+					args.push(function(err) {
+						if(err)
+							callback(err);
+						else
+							handleNextItem();
+					});
+					iterator.apply(null, args);
+				}
+			});
+		}
 	}
 };

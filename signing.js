@@ -24,7 +24,7 @@ function verifySignature(keyring, callback) {
 						if(err) { callback(err); return; }
 						
 						stdout = stdout.toString("utf8");
-						var success = !!(stdout.match(/^sig:!:/m) && !stdout.match(/^sig:[^!]/m));
+						var success = !!(stdout.match(/^(sig|rev):!:/m) && !stdout.match(/^(sig|rev):[^!]/m));
 						
 						fs.unlink(fname, function(err) {
 							if(err)

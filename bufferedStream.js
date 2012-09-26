@@ -19,6 +19,7 @@ module.exports = function(stream) {
 	this.readUntilEnd = readUntilEnd;
 	this.readLine = readLine;
 	this.readArbitrary = readArbitrary;
+	this.whilst = whilst;
 
 	if(stream instanceof Buffer)
 	{
@@ -134,6 +135,33 @@ module.exports = function(stream) {
 	*/
 	function readArbitrary(callback) {
 		read(-3, callback, false);
+	}
+	
+	/**
+	 * Works like async.whilst. Reads an arbitrary amount of bytes from the stream and calls fn with it. When fn calls the callback(err) function
+	 * that has been passed to it as second parameter, reads more bytes and calls fn again. When the stream has ended or fn has called
+	 * the callback function with an error, the `callback` parameter is called.
+	*/
+	function whilst(fn, callback) {
+		readOn();
+
+		function readOn() {
+			readArbitrary(function(err, data) {
+				if(err)
+					callback(err);
+				else if(data.length == 0)
+					callback();
+				else
+				{
+					fn(data, function(err) {
+						if(err)
+							callback(err);
+						else
+							readOn();
+					});
+				}
+			});
+		}
 	}
 	
 	/**

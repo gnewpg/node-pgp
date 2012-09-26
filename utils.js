@@ -41,6 +41,14 @@ function indexOf(buffer, charCode)
 	return -1;
 }
 
+function toProperArray(arr) {
+	var ret = [ ];
+	for(var i=0; i<arr.length; i++)
+		ret.push(arr[i]);
+	return ret;
+}
+
 exports.getTempFilename = getTempFilename;
 exports.hash = hash;
+exports.toProperArray = toProperArray;
 exports.indexOf = indexOf;

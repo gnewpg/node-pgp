@@ -82,6 +82,9 @@ function getHeaderInfo(data, callback)
 
 function generateHeader(tag, packetLength, newFormat)
 {
+	if(newFormat == null)
+		newFormat = (tag >= 16);
+		
 	if(newFormat)
 	{
 		var number = basicTypes.encode125OctetNumber(packetLength);

@@ -22,7 +22,7 @@ function getPacketInfo(tag, body, callback) {
 			getSignaturePacketInfo(body, callback);
 			break;
 		default:
-			callback(new Error("Unsupported packet type"));
+			callback(null, { pkt: tag });
 	}
 }
 
@@ -40,13 +40,13 @@ function getPublicKeyPacketInfo(body, callback)
 		fingerprint : null
 	};
 	
-	if(ret.version == 3)
+	if(ret.version == 3 || ret.version == 2)
 	{
 		ret.date = new Date(body.readUInt32BE(1)*1000);
 		
 		var expires = body.readUInt16BE(5);
 		if(expires)
-			ret.expires = ret.date.getTime() + expires*86400000;
+			ret.expires = new Date(ret.date.getTime() + expires*86400000);
 		
 		ret.pkalgo = body.readUInt8(7);
 		ret.key = body.slice(8);
@@ -251,7 +251,7 @@ function getSignaturePacketInfo(body, callback)
 				if(ret.hashedSubPackets[consts.SIGSUBPKT.EXPORTABLE] && !ret.hashedSubPackets[consts.SIGSUBPKT.EXPORTABLE][0].value)
 					ret.exportable = false;
 				if(ret.hashedSubPackets[consts.SIGSUBPKT.SIG_EXPIRE] && ret.date)
-					ret.expires = ret.date.getTime() + (ret.hashedSubPackets[consts.SIGSUBPKT.SIG_EXPIRE][0].value*1000);
+					ret.expires = new Date(ret.date.getTime() + (ret.hashedSubPackets[consts.SIGSUBPKT.SIG_EXPIRE][0].value*1000));
 
 				callback(null, ret);
 			});
