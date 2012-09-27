@@ -1,3 +1,4 @@
+var package = require("./package.json");
 var child_process = require("child_process");
 var BufferedStream = require("./bufferedStream");
 var basicTypes = require("./basicTypes");
@@ -118,5 +119,32 @@ function dearmor(input) {
 	}
 }
 
+/**
+ * Encodes the given data using PGP ASCII armor.
+ * @param input {Buffer|Readable Stream|String|BufferedStream} The raw binary data to encode
+ * @param messageType {String} One of consts.ARMOR_MESSAGE
+ * @return {BufferedStream}
+*/
+function enarmor(input, messageType) {
+	var ret = new BufferedStream();
+	ret._sendData(new Buffer("-----BEGIN PGP "+messageType+"-----\r\nVersion: "+package.name+" "+package.version+"\r\n\r\n", "utf8"));
+	
+	basicTypes.getBase64EncodingStream(input).whilst(function(data, cb) {
+		ret._sendData(data);
+		cb();
+	}, function(err) {
+		if(err)
+			ret._endData(err);
+		else
+		{
+			ret._sendData(new Buffer("\r\n-----END PGP "+messageType+"-----", "utf8"));
+			ret._endData();
+		}
+	});
+	
+	return ret;
+}
+
 exports.decodeKeyFormat = decodeKeyFormat;
 exports.dearmor = dearmor;
+exports.enarmor = enarmor;

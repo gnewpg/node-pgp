@@ -515,6 +515,17 @@ exports.decodeKeyFormat = function(test) {
 	});
 };
 
+exports.armor = function(test) {
+	test.expect(2);
+	
+	pgp.formats.dearmor(pgp.formats.enarmor(TESTKEY1, pgp.consts.ARMORED_MESSAGE.PUBLIC_KEY)).readUntilEnd(function(err, data) {
+		test.ifError(err);
+		test.equals(TESTKEY1.toString("binary"), data.toString("binary"));
+		
+		test.done();
+	});
+};
+
 exports.key2 = function(test) {
 	test.expect(29);
 	var split = pgp.packets.splitPackets(pgp.formats.dearmor(TESTKEY2));

@@ -31,13 +31,26 @@ see below how to work with that.
 
 Converts the input data from armored ASCII to the binary format. `data` can be
 a Readable Stream, a Buffer, or a String. The function returns a
-[`BufferedStream`](#bufferedStream).
+[`BufferedStream`](#bufferedstream).
 
 	pgp.formats.dearmor(fs.createReadStream("/tmp/test.asc")).readUntilEnd(function(err, data) {
 		if(err)
 			console.warn("An error occurred", err);
 		else
 			; // data is a Buffer with the data in binary format
+	});
+
+### formats.enarmor(data, messageType) ###
+
+Converts the input data from binary format to armored ASCII format. `data` can
+be a Readable Stream, a Buffer, or a String. `messageType` is one of [`pgp.consts.ARMORED_MESSAGE`](#armored-message-type).
+The function returns a [`BufferedStream`](#bufferedstream).
+
+	pgp.formats.enarmor(fs.createReadStream("/tmp/test.pgp"), pgp.consts.ARMORED_MESSAGE).readUntilEnd(function(err, data) {
+		if(err)
+			console.warn("An error occurred", err);
+		else
+			; // data is a Buffer with the armored data encoded in UTF-8
 	});
 
 
@@ -437,3 +450,13 @@ types.
 image types.
 
 	JPEG          : 1
+
+### Armored message type ###
+
+`pgp.consts.ARMORED_MESSAGE` contains the types that ASCII-armored PGP messages
+can have.
+
+	MESSAGE       : "MESSAGE",
+	PUBLIC_KEY    : "PUBLIC KEY BLOCK",
+	PRIVATE_KEY   : "PRIVATE KEY BLOCK",
+	SIGNATURE     : "SIGNATURE"

@@ -118,3 +118,11 @@ exports.HASHALGO = {
 	SHA512        : 10,
 	SHA224        : 11
 };
+
+// Armored message type
+exports.ARMORED_MESSAGE = {
+	MESSAGE       : "MESSAGE",
+	PUBLIC_KEY    : "PUBLIC KEY BLOCK",
+	PRIVATE_KEY   : "PRIVATE KEY BLOCK",
+	SIGNATURE     : "SIGNATURE"
+};
