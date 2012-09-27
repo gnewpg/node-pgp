@@ -162,16 +162,16 @@ function receives the following info object:
 * `pkt`: `consts.PKT.SIGNATURE`,
 * `id` : An ID string created from a hash of this signature. Not part of the
   OpenPGP standard.
-* `sigtype`: The signature type, one of `consts.SIGTYPE`(#signature-type).
+* `sigtype`: The signature type, one of [`consts.SIGTYPE`](#signature-type).
 * `date`: A Date object when the signature was issued
 * `issuer`: The long ID of the issuer key. A 16-digit upper-case hex string.
-* `pkalgo`: The public key algorithm, one of `consts.PKALGO`(#public-key-algorithm)
-* `hashalgo`: The hash algorithm, one of `consts.HASHALGO`(#hash-algorithm)
+* `pkalgo`: The public key algorithm, one of [`consts.PKALGO`](#public-key-algorithm)
+* `hashalgo`: The hash algorithm, one of [`consts.HASHALGO`](#hash-algorithm)
 * `version`: The signature packet version, 3 or 4
 * `binary`: `packetBody`
 * `hashedSubPackets`: An object with the hashed sub-packets
    (see [the RFC](http://tools.ietf.org/html/rfc4880#section-5.2.3.1)). The keys
-   are the sub-packet types (one of `consts.SIGSUBPKT`(#signature-sub-packet-type)),
+   are the sub-packet types (one of [`consts.SIGSUBPKT`](#signature-sub-packet-type)),
    the values are arrays of objects with the following keys:
 	* `critical`: A boolean, if true, the whole signature should be ignored if
 	  the software does not know how to handle this sub-packet type.
