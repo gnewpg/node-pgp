@@ -11,7 +11,7 @@ module.exports = function() {
 	this._addAllSingle = addAllSingle;
 	this._end = end;
 	this.next = next;
-	this.forEach = forEach;
+	this.forEachSeries = forEachSeries;
 	
 	function check() {
 		while(items.length > 0 && listeners.length > 0)
@@ -63,7 +63,7 @@ module.exports = function() {
 		check();
 	}
 
-	function forEach(iterator, callback) {
+	function forEachSeries(iterator, callback) {
 		handleNextItem();
 
 		function handleNextItem() {

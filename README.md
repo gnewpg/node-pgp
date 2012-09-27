@@ -299,10 +299,10 @@ a possible error message.
 Objects of this type represent a queue of items.
 
 There are two ways to read the items. The probably simpler one works similar to
-the `forEach()` method from the `async` library:
+the `forEachSeries()` method from the `async` library:
 
 	var fifo; // Of type Fifo
-	fifo.forEach(function(item, callback) {
+	fifo.forEachSeries(function(item, callback) {
 		// Do something with item, maybe something asynchronous
 		var error; // A possible error that happened during the processing of the item
 		if(error)
