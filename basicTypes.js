@@ -85,11 +85,22 @@ function splitMPIs(data)
 	var i = 0;
 	while(i < data.length)
 	{
-		var length = Math.floor((data.readUInt16BE(i)+7) / 8);
-		ret.push(data.slice(i, 2+i+length));
-		i += 2+length;
+		var length = data.readUInt16BE(i);
+		var bytes = Math.ceil(length/8);
+		ret.push(new MPI(data.slice(2+i, 2+i+bytes), length));
+		i += 2+bytes;
 	}
 	return ret;
+}
+
+/**
+ * A Multi-Precision Integer (MPI). `length` is the length in bits (not bytes!) and buffer is a buffer whose first
+ * `length` bits represent the number in Big Endian.
+*/
+function MPI(buffer, length)
+{
+	this.buffer = buffer;
+	this.length = length;
 }
 
 /**
@@ -279,5 +290,6 @@ function getBase64DecodingStream(input)
 exports.read125OctetNumber = read125OctetNumber;
 exports.encode125OctetNumber = encode125OctetNumber;
 exports.splitMPIs = splitMPIs;
+exports.MPI = MPI;
 exports.getBase64EncodingStream = getBase64EncodingStream;
 exports.getBase64DecodingStream = getBase64DecodingStream;

@@ -113,9 +113,10 @@ function receives an info object with the following content:
   overridden by self-signatures.
 * `date`: A Date object indicating when the key was created.
 * `pkalgo`: One of [`consts.PKALGO`](#public-key-algorithm)
-* `keyParts`: An object containing the relevant key parts as Buffer objects
+* `keyParts`: An object containing the relevant key parts as [MPI](#mpi) objects
   Algorithm specific, might contain the values `n`, `e`, `p`, `q`, `g` and `y`
 * `fingerprint`: The fingerprint, a 32-digit hex number as upper-case String
+* `size`: The key size in bits
 
 ### packetContent.getPublicSubkeyPacketInfo(packetBody, callback) ###
 
@@ -331,6 +332,11 @@ The other method reads each item manually by using the `next` function:
 			}
 		});
 	}
+
+### MPI ###
+
+Objects of this type represent a Multi-Precision Integer (MPI). The `length` property is the length of the number in **bits**. The first `length`
+bytes of the `buffer` property (which is a Buffer object) represent the number, encoded in Big Endian.
 
 
 Constants

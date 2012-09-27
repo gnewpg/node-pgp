@@ -37,7 +37,8 @@ function getPublicKeyPacketInfo(body, callback)
 		date : null,
 		pkalgo : null,
 		keyParts : null,
-		fingerprint : null
+		fingerprint : null,
+		size : null
 	};
 	
 	if(ret.version == 3 || ret.version == 2)
@@ -53,6 +54,7 @@ function getPublicKeyPacketInfo(body, callback)
 		
 		var keyParts = basicTypes.splitMPIs(ret.key);
 		ret.keyParts = { n : keyParts[0], e : keyParts[1] };
+		ret.size = ret.keyParts.n.length;
 
 		ret.id = n.toString("hex", n.length-8).toUpperCase();
 		ret.fingerprint = hash(Buffer.concat([ keyParts.n.slice(2), keyParts.e.slice(2) ]), "md5", "hex").toUpperCase();
@@ -65,11 +67,20 @@ function getPublicKeyPacketInfo(body, callback)
 		
 		var keyParts = basicTypes.splitMPIs(ret.key);
 		if(ret.pkalgo == consts.PKALGO.RSA_ES || ret.pkalgo == consts.PKALGO.RSA_E || ret.pkalgo == consts.PKALGO.RSA_S)
+		{
 			ret.keyParts = { n : keyParts[0], e : keyParts[1] };
+			ret.size = ret.keyParts.n.length;
+		}
 		else if(ret.pkalgo == consts.PKALGO.ELGAMAL_E)
+		{
 			ret.keyParts = { p : keyParts[0], g : keyParts[1], y : keyParts[2] };
+			ret.size = ret.keyParts.p.length;
+		}
 		else if(ret.pkalgo == consts.PKALGO.DSA)
+		{
 			ret.keyParts = { p : keyParts[0], q : keyParts[1], g : keyParts[2], y : keyParts[3] };
+			ret.size = ret.keyParts.p.length;
+		}
 		
 		var fingerprintData = new Buffer(body.length + 3);
 		fingerprintData.writeUInt8(0x99, 0);
