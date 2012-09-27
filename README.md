@@ -261,17 +261,52 @@ function. This example passes all data from the stream to a writable stream.
 		};
 	}
 
+#### whilst(iterator, callback) ####
+
+This function works like the `whilst()` method from the `async` library. It calls
+the `iterator` function with an arbitrary amount of data multiple times until the
+end of the stream is reached. Then, the `callback` function is called once with
+a possible error message.
+
+	var stream; // Of type BufferedStream
+	stream.whilst(function(data, callback) {
+		// Do something with the data chunk, maybe something asynchronous
+		var error; // A possible error that happened during the processing of the data
+		if(error)
+			callback(error); // Stops the reading and calls the second callback function with the error
+		else
+			callback(); // Reads the next chunk or calls the second callback function if the stream has ended
+	}, function(err) {
+		// The stream has ended or an error occurred
+	});
+
 
 ### Fifo ###
 
-Objects of this type represent a queue of items that can be read bit-by-bit
-using the `next` method.
+Objects of this type represent a queue of items.
+
+There are two ways to read the items. The probably simpler one works similar to
+the `forEach()` method from the `async` library:
+
+	var fifo; // Of type Fifo
+	fifo.forEach(function(item, callback) {
+		// Do something with item, maybe something asynchronous
+		var error; // A possible error that happened during the processing of the item
+		if(error)
+			callback(error); // Breaks the loop and calls the second callback function with the error
+		else
+			callback(); // Loops to the next item, or calls the second callback function without an error if no items are left
+	}, function(err) {
+		// The loop has ended
+	});
+
+The other method reads each item manually by using the `next` function:
 
 	var fifo; // Of type Fifo
 	readNext();
 	function readNext() {
 		fifo.next(function(err, item) {
-			if(err ### true)
+			if(err === true)
 				; // No items left
 			else if(err)
 				console.log("An error occurred", err);
