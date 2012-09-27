@@ -127,7 +127,7 @@ function dearmor(input) {
 */
 function enarmor(input, messageType) {
 	var ret = new BufferedStream();
-	ret._sendData(new Buffer("-----BEGIN PGP "+messageType+"-----\r\nVersion: "+package.name+" "+package.version+"\r\n\r\n", "utf8"));
+	ret._sendData(new Buffer("-----BEGIN PGP "+messageType+"-----\r\nVersion: "+package.name+" v"+package.version+"\r\n\r\n", "utf8"));
 	
 	basicTypes.getBase64EncodingStream(input).whilst(function(data, cb) {
 		ret._sendData(data);
@@ -137,7 +137,7 @@ function enarmor(input, messageType) {
 			ret._endData(err);
 		else
 		{
-			ret._sendData(new Buffer("\r\n-----END PGP "+messageType+"-----", "utf8"));
+			ret._sendData(new Buffer("-----END PGP "+messageType+"-----\r\n", "utf8"));
 			ret._endData();
 		}
 	});

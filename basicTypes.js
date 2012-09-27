@@ -159,7 +159,7 @@ function getBase64EncodingStream(input)
 				var crcBuffer = new Buffer(3);
 				crcBuffer.writeUInt8((crc & 0xFF0000) >> 16, 0);
 				crcBuffer.writeUInt16BE(crc & 0xFFFF, 1);
-				ret._sendData(new Buffer("="+crcBuffer.toString("base64"), "utf8"));
+				ret._sendData(new Buffer("="+crcBuffer.toString("base64")+"\r\n", "utf8"));
 				ret._endData();
 				return;
 			}
