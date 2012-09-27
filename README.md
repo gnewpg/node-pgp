@@ -68,22 +68,18 @@ Stream, a Buffer or a String containing the binary data to split. The method
 returns a [`Fifo`](#fifo) object, see below how to use that.
 
 	var split = packets.splitPackets(fs.createReadStream("/tmp/test.pgp"));
-	iterate();
-	function iterate() {
-		split.next(function(err, type, header, body) {
-			if(err ### true)
-				; // All packets have been processed
-			else if(err)
-				console.warn("An error occurred", err);
-			else {
-				// type is the packet type, one of consts.PKT, see below
-				// header is a Buffer containing the packet header
-				// body is a Buffer containing the packet body
-				
-				iterate();
-			}
-		});
-	}
+	split.forEachSeries(function(type, header, body, callback) {
+		// type is the packet type, one of consts.PKT, see below.
+		// header is a Buffer containing the packet header.
+		// body is a Buffer containing the packet body.
+		
+		callback(); // Iterate to next packet
+	}, function(err) {
+		if(err)
+			console.warn("An error occurred", err);
+		else
+			; // All packets have been handled
+	});
 
 ### packets.generatePacket(type, body) ###
 
