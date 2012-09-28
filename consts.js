@@ -95,7 +95,7 @@ exports.ATTRSUBPKT = {
 };
 
 // Attribute subpacket image types
-exports.IMAGETYPES = {
+exports.IMAGETYPE = {
 	JPEG          : 1
 };
 

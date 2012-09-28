@@ -148,7 +148,7 @@ contain of several sub-packets, which can only be JPEG images.
 	  image data.
 	* `imageType`: If `type` is `consts.ATTRSUBPKT.IMAGE`, this is  the image
 	  type, one of [`consts.IMAGETYPE`](#attribute-sub-packet-image-types)
-	* `binary`: `packetBody`
+* `binary`: `packetBody`
 
 ### packetContent.getSignaturePacketType(packetBody, callback) ###
 

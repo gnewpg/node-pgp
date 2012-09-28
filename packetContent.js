@@ -176,11 +176,11 @@ function getAttributeSubPacketInfo(type, body) {
 	{
 		var headerLength = body.readUInt16LE(0); // This has to be Little Endian!
 		var header = body.slice(2, 2+headerLength);
-		ret.image = body.slice(2+headerLength);
+		ret.image = body.slice(headerLength);
 
 		var headerVersion = header.readUInt8(0);
 		if(headerVersion == 1)
-			ret.imageType = body.readUInt8(1);
+			ret.imageType = header.readUInt8(1);
 	}
 	return ret;
 }
