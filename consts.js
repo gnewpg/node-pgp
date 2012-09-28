@@ -126,3 +126,11 @@ exports.ARMORED_MESSAGE = {
 	PRIVATE_KEY   : "PRIVATE KEY BLOCK",
 	SIGNATURE     : "SIGNATURE"
 };
+
+exports.SECURITY = {
+	UNKNOWN : -1,
+	UNACCEPTABLE : 0,
+	BAD : 1,
+	MEDIUM : 2,
+	GOOD : 3
+};

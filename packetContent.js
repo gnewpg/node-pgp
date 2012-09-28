@@ -33,16 +33,20 @@ function getPublicKeyPacketInfo(body, callback)
 		id: null,
 		binary : body,
 		version : body.readUInt8(0),
+		versionSecurity : null,
 		expires : null,
 		date : null,
 		pkalgo : null,
 		keyParts : null,
 		fingerprint : null,
-		size : null
+		size : null,
+		sizeSecurity : null,
+		security : null
 	};
 	
 	if(ret.version == 3 || ret.version == 2)
 	{
+		ret.versionSecurity = consts.SECURITY.BAD;
 		ret.date = new Date(body.readUInt32BE(1)*1000);
 		
 		var expires = body.readUInt16BE(5);
@@ -61,6 +65,7 @@ function getPublicKeyPacketInfo(body, callback)
 	}
 	else if(ret.version == 4)
 	{
+		ret.versionSecurity = consts.SECURITY.GOOD;
 		ret.date = new Date(body.readUInt32BE(1)*1000);
 		ret.pkalgo = body.readUInt8(5);
 		ret.key = body.slice(6);
@@ -94,6 +99,16 @@ function getPublicKeyPacketInfo(body, callback)
 		callback(new Error("Unknown key version "+ret.version+"."));
 		return;
 	}
+	
+	if(ret.size < 1024)
+		ret.sizeSecurity = consts.SECURITY.UNACCEPTABLE;
+	else if(ret.size < 2048)
+		ret.sizeSecurity = consts.SECURITY.BAD;
+	else if(ret.size < 3072)
+		ret.sizeSecurity = consts.SECURITY.MEDIUM;
+	else
+		ret.sizeSecurity = consts.SECURITY.GOOD;
+	ret.security = Math.min(ret.sizeSecurity, ret.versionSecurity);
 	
 	callback(null, ret);
 }
@@ -203,7 +218,10 @@ function getSignaturePacketInfo(body, callback)
 		expires : null,
 		hashedPart : null, // The part of the signature that is concatenated to the data that is to be signed when creating the hash
 		first2HashBytes : null, // The first two bytes of the hash as 16-bit unsigned integer
-		signature : null // The signature as buffer object
+		signature : null, // The signature as buffer object
+		hashalgoSecurity : null,
+		security : null
+		
 	};
 
 	var byte1 = body.readUInt8(0);
@@ -270,6 +288,16 @@ function getSignaturePacketInfo(body, callback)
 	}
 	else
 		callback(new Error("Unknown signature version "+byte1+"."));
+	
+	if([ consts.HASHALGO.RIPEMD160, consts.HASHALGO.SHA256, consts.HASHALGO.SHA384, consts.HASHALGO.SHA512, consts.HASHALGO.SHA224 ].indexOf(ret.hashalgo) != -1)
+		ret.hashalgoSecurity = consts.SECURITY.GOOD;
+	else if(ret.hashalgo == consts.HASHALGO.SHA1)
+		ret.hashalgoSecurity = consts.SECURITY.MEDIUM;
+	else if(ret.hashalgo == consts.HASHALGO.MD5)
+		ret.hashalgoSecurity = consts.SECURITY.BAD;
+	else
+		ret.hashalgoSecurity = consts.SECURITY.UNKOWN;
+	ret.security = ret.hashalgoSecurity;
 }
 
 function extractSignatureSubPackets(body, callback)
