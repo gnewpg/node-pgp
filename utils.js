@@ -1,6 +1,7 @@
 var config = require("./config");
 var fs = require("fs");
 var crypto = require("crypto");
+var consts = require("./consts");
 
 function getTempFilename(callback)
 {
@@ -26,6 +27,18 @@ function getTempFilename(callback)
 
 function hash(data, algo, toFormat)
 {
+	if(typeof algo == 'number')
+	{
+		for(var i in consts.HASHALGO)
+		{
+			if(consts.HASHALGO[i] == algo)
+			{
+				algo = i;
+				return;
+			}
+		}
+	}
+
 	var ret = crypto.createHash(algo);
 	ret.update(data);
 	return ret.digest(toFormat);

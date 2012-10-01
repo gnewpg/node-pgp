@@ -101,10 +101,8 @@ function getPublicKeyPacketInfo(body, callback)
 	}
 	
 	if(ret.size < 1024)
-		ret.sizeSecurity = consts.SECURITY.UNACCEPTABLE;
-	else if(ret.size < 2048)
 		ret.sizeSecurity = consts.SECURITY.BAD;
-	else if(ret.size < 3072)
+	else if(ret.size < 2048)
 		ret.sizeSecurity = consts.SECURITY.MEDIUM;
 	else
 		ret.sizeSecurity = consts.SECURITY.GOOD;

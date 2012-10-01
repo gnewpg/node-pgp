@@ -8,5 +8,6 @@ module.exports = {
 	consts : require("./consts"),
 	config : require("./config"),
 	Fifo : require("./fifo"),
-	utils : require("./utils")
+	utils : require("./utils"),
+	encryption : require("./encryption")
 };

@@ -68,7 +68,31 @@ function verifyAttributeSignature(keyBody, attributeBody, signature, issuerKeyBo
 	verifyXYSignature(callback, keyBody, signature, issuerKeyBody, attributeBody, consts.PKT.ATTRIBUTE);
 }
 
+function detachedSignText(text, privateKey, callback) {
+	utils.getTempFilename(function(err, fname) {
+		if(err) { callback(err); return; }
+		
+		fs.writeFile(fname, privateKey, function(err) {
+			if(err)
+				return unlink(err);
+			
+			var gpg = child_process.spawn(config.gpg, [ "--no-default-keyring", "--digest-algo", "SHA512", "--secret-keyring", fname, "--output", "-", "--detach-sign" ]);
+			gpg.stdin.end(text, "utf8");
+			new BufferedStream(gpg.stdout).readUntilEnd(unlink);
+		});
+		
+		function unlink() {
+			fs.unlink(fname, function(err) {
+				if(err)
+					console.log("Error removing temporary file "+fname+".", err);
+			});
+			callback.apply(null, arguments);
+		}
+	});
+}
+
 exports.verifyKeySignature = verifyKeySignature;
 exports.verifySubkeySignature = verifySubkeySignature;
 exports.verifyIdentitySignature = verifyIdentitySignature;
 exports.verifyAttributeSignature = verifyAttributeSignature;
+exports.detachedSignText = detachedSignText;
