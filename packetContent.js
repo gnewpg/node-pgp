@@ -219,7 +219,6 @@ function getSignaturePacketInfo(body, callback)
 		signature : null, // The signature as buffer object
 		hashalgoSecurity : null,
 		security : null
-		
 	};
 
 	var byte1 = body.readUInt8(0);

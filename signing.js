@@ -5,6 +5,7 @@ var utils = require("./utils");
 var fs = require("fs");
 var consts = require("./consts");
 var BufferedStream = require("./bufferedStream");
+var async = require("async");
 
 function verifySignature(keyring, callback) {
 	utils.getTempFilename(function(err, fname) {
@@ -39,33 +40,79 @@ function verifySignature(keyring, callback) {
 	});
 }
 
-function verifyXYSignature(callback, keyBody, signatureBody, issuerKeyBody, subObjectBody, subObjectType)
+function verifyXYSignature(keyring, keyId, signatureInfo, callback, getSubObject, subObjectType)
 {
 	var buffers = [ ];
-	buffers.push(packets.generatePacket(consts.PKT.PUBLIC_KEY, keyBody));
-	if(subObjectBody)
-		buffers.push(packets.generatePacket(subObjectType, subObjectBody));
-	buffers.push(packets.generatePacket(consts.PKT.SIGNATURE, signatureBody));
-	if(issuerKeyBody)
-		buffers.push(packets.generatePacket(consts.PKT.PUBLIC_KEY, issuerKeyBody));
-	verifySignature(Buffer.concat(buffers), callback);
+	var issuerSecurity = null;
+
+	async.series([
+		function(next) {
+			keyring.getKey(signatureInfo.issuer, function(err, issuerInfo) {
+				if(err)
+					next(err);
+				else if(issuerInfo == null)
+					callback(null, null);
+				else
+				{
+					buffers.push(packets.generatePacket(consts.PKT.PUBLIC_KEY, issuerInfo.binary));
+					issuerSecurity = issuerInfo.security;
+					next();
+				}
+			});
+		},
+		function(next) {
+			if(signatureInfo.issuer == keyId)
+				return next();
+
+			keyring.getKey(keyId, function(err, keyInfo) {
+				if(err)
+					return next(err);
+
+				buffers.push(packets.generatePacket(consts.PKT.PUBLIC_KEY, keyInfo.binary));
+				next();
+			};
+		},
+		function(next) {
+			if(getSubObject == null)
+				return next();
+
+			getSubObject(function(err, subInfo) {
+				if(err)
+					return next(err);
+
+				buffers.push(packets.generatePacket(subObjectType, subInfo.binary));
+			});
+		}
+	], function(err) {
+		if(err)
+			return callback(err);
+
+		verifySignature(Buffer.concat(buffers), function(err, verified) {
+			if(verified)
+			{
+				signatureInfo.verified = true;
+				signatureInfo.security = Math.min(signatureInfo.security, issuerSecurity);
+			}
+
+			callback(err, verified);
+		});
+	});
 }
 
-
-function verifyKeySignature(keyBody, signature, issuerKeyBody, callback) {
-	verifyXYSignature(callback, keyBody, signature, issuerKeyBody);
+function verifyKeySignature(keyring, keyId, signatureInfo, callback) {
+	verifyXYSignature(keyring, keyId, signatureInfo, callback);
 }
 
-function verifySubkeySignature(keyBody, subkeyBody, signature, issuerKeyBody, callback) {
-	verifyXYSignature(callback, keyBody, signature, issuerKeyBody, subkeyBody, consts.PKT.PUBLIC_SUBKEY);
+function verifySubkeySignature(keyring, keyId, subkeyId, signatureInfo, callback) {
+	verifyXYSignature(keyring, keyId, signatureInfo, callback, async.apply(utils.proxy(keyring, keyring.getSubkey), keyId, subkeyId), consts.PKT.PUBLIC_SUBKEY);
 }
 
-function verifyIdentitySignature(keyBody, idBody, signature, issuerKeyBody, callback) {
-	verifyXYSignature(callback, keyBody, signature, issuerKeyBody, idBody, consts.PKT.USER_ID);
+function verifyIdentitySignature(keyring, keyId, identityId, signatureInfo, callback) {
+	verifyXYSignature(keyring, keyId, signatureInfo, callback, async.apply(utils.proxy(keyring, keyring.getIdentity), keyId, identityId), consts.PKT.USER_ID);
 }
 
-function verifyAttributeSignature(keyBody, attributeBody, signature, issuerKeyBody, callback) {
-	verifyXYSignature(callback, keyBody, signature, issuerKeyBody, attributeBody, consts.PKT.ATTRIBUTE);
+function verifyAttributeSignature(keyring, keyId, attributeId, signatureInfo, callback) {
+	verifyXYSignature(keyring, keyId, signatureInfo, callback, async.apply(utils.proxy(keyring, keyring.getAttribute), keyId, attributeId), consts.PKT.ATTRIBUTE);
 }
 
 function detachedSignText(text, privateKey, callback) {
@@ -78,14 +125,25 @@ function detachedSignText(text, privateKey, callback) {
 			
 			var gpg = child_process.spawn(config.gpg, [ "--no-default-keyring", "--digest-algo", "SHA512", "--secret-keyring", fname, "--output", "-", "--detach-sign" ]);
 			gpg.stdin.end(text, "utf8");
-			new BufferedStream(gpg.stdout).readUntilEnd(unlink);
+			var stderr = new BufferedStream(gpg.stderr);
+			new BufferedStream(gpg.stdout).readUntilEnd(function(err, signature) {
+				if(!err && signature.length == 0)
+				{
+					stderr.readUntilEnd(function(err, stderrData) {
+						unlink(new Error("Signing failed" + (stderrData ? ": "+stderrData : "")));
+					});
+				}
+				else
+					unlink(err, signature);
+			});
 		});
 		
 		function unlink() {
-			fs.unlink(fname, function(err) {
+			/*fs.unlink(fname, function(err) {
 				if(err)
 					console.log("Error removing temporary file "+fname+".", err);
-			});
+			});*/
+			console.log(fname);
 			callback.apply(null, arguments);
 		}
 	});

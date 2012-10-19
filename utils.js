@@ -61,7 +61,14 @@ function toProperArray(arr) {
 	return ret;
 }
 
+function proxy(context, func) {
+	return function() {
+		return func.apply(context, arguments);
+	}
+}
+
 exports.getTempFilename = getTempFilename;
 exports.hash = hash;
 exports.toProperArray = toProperArray;
 exports.indexOf = indexOf;
+exports.proxy = proxy;
