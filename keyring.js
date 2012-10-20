@@ -447,7 +447,194 @@ Keyring.prototype = {
 
 	saveChanges : function(callback) { _e(callback); },
 
-	revertChanges : function(callback) { _e(callback); }
+	revertChanges : function(callback) { _e(callback); },
+
+	importKeys : function(keyData, callback, acceptLocal) {
+		var t = this;
+
+		var imported = {
+			keys : [ ],
+			failed : [ ]
+		};
+
+		function add(addTo, infoObj, err, next) {
+			if(err)
+			{
+				infoObj.err = err;
+				imported.failed.push(err);
+				next();
+				return null;
+			}
+			else
+			{
+				addTo.push(infoObj);
+				next();
+				return infoObj.id;
+			}
+		}
+
+		var lastKeyId = null;
+		var lastSubkeyId = null;
+		var lastIdentityId = null;
+		var lastAttributeId = null;
+
+		var lastKeyImported = null;
+		var lastSubkeyImported = null;
+		var lastIdentityImported = null;
+		var lastAttributeImported = null;
+
+		packets.splitPackets(keyData).forEachSeries(function(tag, header, body, next) {
+			getPacketInfo(tag, body, function(err, info) {
+				if(err)
+					return callback(err);
+
+				switch(tag) {
+					case consts.PKT.PUBLIC_KEY:
+						lastKeyId = info.id;
+						lastKeyImported = { type: tag, id: info.id, signatures: [ ], subkeys: [ ], identities: [ ], attributes: [ ] };
+						lastSubkeyId = lastIdentityId = lastAttributeId = null;
+						t.addKey(info, function(err) {
+							lastKeyId = add(imported.keys, lastKeyImported, err, next);
+						});
+						break;
+					case consts.PKT.PUBLIC_SUBKEY:
+						lastSubkeyId = info.id;
+						lastSubkeyImported = { type: tag, id: info.id, signatures: [ ] };
+						lastIdentityId = lastAttributeId = null;
+
+						if(lastKeyId == null)
+							lastSubkeyId = add(null, lastSubkeyImported, new Error("Subkey without key."), next);
+						else
+						{
+							t.addSubkey(lastKeyId, info, function(err) {
+								lastSubkeyId = add(lastKeyImported.subkeys, lastSubkeyImported, err, next);
+							});
+						}
+
+						break;
+					case consts.PKT.USER_ID:
+						lastIdentityId = info.id;
+						lastIdentityImported = { type: tag, id: info.id, signatures: [ ] };
+						lastSubkeyId = lastAttributeId = null;
+
+						if(lastKeyId == null)
+							lastIdentityId = add(null, lastIdentityImported, new Error("Identity without key."), next);
+						else
+						{
+							t.addIdentity(lastKeyId, info, function(err) {
+								lastIdentityId = add(lastKeyImported.identities, lastIdentityImported, err, next);
+							});
+						}
+
+						break;
+					case consts.PKT.ATTRIBUTE:
+						lastAttributeId = info.id;
+						lastAttributeImported = { type: tag, id: info.id, signatures: [ ] };
+						lastSubkeyId = lastIdentityId = null;
+
+						if(lastKeyId == null)
+							lastAttributeId = add(null, lastAttributeImported, new Error("Attribute without key."), next);
+						else
+						{
+							t.addAttribute(lastKeyId, info, function(err) {
+								lastAttributeId = add(lastKeyImported.attributes, lastAttributeImported, err, next);
+							});
+						}
+
+						break;
+					case consts.PKT.SIGNATURE:
+						var lastSignatureImported = { type: tag, id: info.id, issuer: info.issuer, date: info.date, sigtype: info.sigtype };
+
+						if(!acceptLocal && !info.exportable)
+							add(null, lastSignatureImported, new Error("Signature is not exportable."), next);
+						else if(lastSubkeyId != null)
+						{
+							t.addSubkeySignature(lastKeyId, lastSubkeyId, info, function(err) {
+								add(lastSubkeyImported.signatures, lastSignatureImported, err, next);
+							});
+						}
+						else if(lastIdentityId != null)
+						{
+							t.addIdentitySignature(lastKeyId, lastIdentityId, info, function(err) {
+								add(lastIdentityImported.signatures, lastSignatureImported, err, next);
+							});
+						}
+						else if(lastAttributeId != null)
+						{
+							t.addAttributeSignature(lastKeyId, lastAttributeId, info, function(err) {
+								add(lastAttributeImported.signatures, lastSignatureImported, err, next);
+							});
+						}
+						else if(lastKeyId != null)
+						{
+							t.addKeySignature(lastKeyId, info, function(err) {
+								add(lastKeyImported.signatures, lastSignatureImported, err, next);
+							});
+						}
+						else
+							add(null, lastSignatureImported, new Error("Signature without object."), next);
+
+						break;
+					default:
+						add(null, { type: tag }, new Error("Unknown packet type."), next);
+						break;
+				}
+			});
+		}, function(err) {
+			if(err)
+				callback(err);
+			else
+				callback(null, imported);
+		});
+	},
+
+	exportKey : function(keyId, selection) {
+		var ret = new BufferedStream();
+
+		if(selection == null)
+			selection = { };
+
+		var opts = [
+			{ tag : consts.PKT.SIGNATURE, list : t.getKeySignatureList, get : t.getKeySignature, selection: selection.signatures },
+			{ tag : consts.PKT.USER_ID, list : t.getIdentityList, get : t.getIdentity, selection: selection.identities, sub : [
+				{ tag : consts.PKT.SIGNATURE, list : t.getIdentitySignatureList, get : t.getIdentitySignature, selection: selection.signatures }
+			] },
+			{ tag : consts.PKT.ATTRIBUTE, list : t.getAttributeList, get : t.getAttribute, selection: selection.attributes, sub : [
+				{ tag : consts.PKT.SIGNATURE, list : t.getAttributeSignatureList, get : t.getAttributeSignature, selection: selection.signatures }
+			] },
+			{ tag : consts.PKT.PUBLIC_SUBKEY, list : t.getSubkeyList, get : t.getSubkeyList, selection: selection.subkeys, sub : [
+				{ tag: consts.PKT.SIGNATURE, list : t.getSubkeySignatureList, get : t.getSubkeySignature, selection: selection.signatures }
+			] }
+		];
+
+		function goThroughList(opts, args, callback) {
+			async.forEachSeries(opts || [ ], function(opt, next2) {
+				opt.list.apply(t, args).forEachSeries(function(id, next1) {
+					var args2 = args.concat([ id ]);
+					opt.get.apply(t, args2.concat([ function(err, info) {
+						if(err)
+							return next1(err);
+
+						if(opt.selection == null || opt.selection[info.id])
+						{
+							ret._sendData(packets.generatePacket(opt.tag, info.binary));
+
+							if(opt.sub)
+								return goThroughList(opt.sub, args2, next2);
+						}
+
+						next2();
+					} ]));
+				}, callback);
+			}, callback);
+		}
+
+		goThroughList(opts, [ ], function(err) {
+			ret._endData(err);
+		});
+
+		return ret;
+	}
 };
 
 function _e(callback) {
@@ -571,7 +758,7 @@ function _subkeySignatureVerified(keyring, keyId, subkeyId, signatureInfo, callb
 
 	// Check 5b
 	if(signatureInfo.sigtype == pgp.consts.SIG.SUBKEY && signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE])
-		checks.push(async.apply(_checkSubkeyExpiration, keyId, signatureInfo.issuer));
+		checks.push(async.apply(_checkSubkeyExpiration, keyId, subkeyId));
 
 	async.series(checks, callback);
 }
@@ -854,92 +1041,138 @@ function _resetSignatureRevocationStatus(keyring, keyId, callback) {
 	], callback);
 }
 
+function _getAllSignatures(keyring, keyId, filter) {
+	var ret = new Fifo();
+	async.series([
+		function(next) {
+			keyring.getKeySignatures(keyId, filter).forEachSeries(function(signatureInfo, next) {
+				ret._add(signatureInfo);
+				next();
+			}, next);
+		},
+		function(next) {
+			keyring.getIdentityList(keyId).forEachSeries(function(identityId, next) {
+				keyring.getIdentitySignatures(keyId, identityId, filter).forEachSeries(function(signatureInfo, next) {
+					ret._add(signatureInfo);
+					next();
+				}, next);
+			}, next);
+		},
+		function(next) {
+			keyring.getAttributeList(keyId).forEachSeries(function(attributeId, next) {
+				keyring.getAttributeSignatures(keyId, attributeId, filter).forEachSeries(function(signatureInfo, next) {
+					ret._add(signatureInfo);
+					next();
+				}, next);
+			}, next);
+		}
+	], p(ret, ret._end));
+	return ret;
+}
+
 // Check 5a, 6: Check self-signatures for expiration date and primary id
 function _checkSelfSignatures(keyring, keyId, callback) {
-	db.getEntry("keys", [ "binary" ], { id: keyId }, function(err, keyRecord) {
-		if(err) { callback(err); return; }
+	keyring.getKey(keyId, function(err, keyInfo) {
+		if(err)
+			return callback(err);
 
-		pgp.packetContent.getPublicKeyPacketInfo(keyRecord.binary, function(err, keyInfo) {
-			if(err) { callback(err); return; }
+		var updates = { };
+		if(typeof keyInfo.expiresOrig == "undefined")
+		{
+			keyInfo.expiresOrig = keyInfo.expires;
+			updates.expiresOrig = keyInfo.expiresOrig;
+		}
 
-			var expire = keyInfo.expires;
-			var primary = null;
+		var expire = keyInfo.expiresOrig;
+		var expireDate = -1;
+		var primary = null;
+		var primaryDate = -1;
 
-			db.getEntriesSync("keys_signatures_all", [ "id", "binary", "table" ], { key: keyId, issuer: keyId, verified: true, sigtype: [ pgp.consts.SIG.KEY, pgp.consts.SIG.CERT_0, pgp.consts.SIG.CERT_1, pgp.consts.SIG.CERT_2, pgp.consts.SIG.CERT_3 ], revokedby: null }, 'ORDER BY "date" ASC', con).forEachSeries(function(sigRecord, cb) {
-				pgp.packetContent.getSignaturePacketInfo(sigRecord.binary, function(err, sigInfo) {
-					if(err) { cb(err); return; }
+		function checkExpire(signatureInfo, next) {
+			if(signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE] && signatureInfo.date && signatureInfo.date.getTime() > expireDate)
+			{
+				if(signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE][0] == 0)
+					expire = null;
+				else
+					expire = new Date(keyInfo.date.getTime() + signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE][0].value*1000);
+				expireDate = signatureInfo.date.getTime();
+			}
+			next();
+		}
 
-					if(sigInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE])
-						expire = new Date(keyInfo.date.getTime() + sigInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE][0].value*1000);
-					if(sigRecord.table == "keys_identities_signatures" && sigInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.PRIMARY_UID] && sigInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.PRIMARY_UID][0].value)
-						primary = sigRecord.id;
+		function checkPrimaryAndExpire(identityId, signatureInfo, next) {
+			if(signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.PRIMARY_UID] && signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.PRIMARY_UID][0].value && signatureInfo.date && signatureInfo.date.getTime() > primaryDate)
+			{
+				primary = identityId;
+				primaryDate = signatureInfo.date.getTime();
+			}
+			checkExpire(signatureInfo, next);
+		}
 
-					cb();
-				});
-			}, function(err) {
-				if(err) { callback(err); return; }
+		async.series([
+			function(next) {
+				keyring.getKeySignatures(keyId, filter).forEachSeries(checkExpire, next);
+			},
+			function(next) {
+				keyring.getIdentityList(keyId).forEachSeries(function(identityId, next) {
+					keyring.getIdentitySignatures(keyId, identityId, filter).forEachSeries(async.apply(checkPrimaryAndExpire, identityId), next);
+				}, next);
+			},
+			function(next) {
+				keyring.getAttributeList(keyId).forEachSeries(function(attributeId, next) {
+					keyring.getAttributeSignatures(keyId, attributeId, filter).forEachSeries(checkExpire, next);
+				}, next);
+			}
+		], function(err) {
+			if(err)
+				return callback(err);
 
+			updates.expires = expire;
+			updates.primary_identity = primary;
+
+			keyring._updateKey(keyId, updates, callback);
+		});
+	});
+}
+
+function _checkSubkeyExpiration(keyring, keyId, subkeyId, callback) {
+	keyring.getSubkey(keyId, subkeyId, function(err, subkeyInfo) {
+		if(err)
+			return callback(err);
+
+		var expire = null;
+		var expireDate = -1;
+
+		keyring.getSubkeySignatures(keyId, subkeyId, { verified: true, sigtype: pgp.consts.SIG.SUBKEY }).forEachSeries(function(signatureInfo, next) {
+			if(signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE] && signatureInfo.date && signatureInfo.date.getTime() > expireDate)
+			{
+				if(signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE][0].value == 0)
+					expire = null;
+				else
+					expire = new Date(subkeyInfo.date.getTime() + signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE][0].value*1000);
+				expireDate = signatureInfo.date.getTime();
+			}
+
+			next();
+		}, function(err) {
+			if(err)
+				return callback(err);
+
+			keyring.getSubkeySignatures(keyId, subkeyId, { sigtype: pgp.consts.SIG.SUBKEY }).forEachSeries(function(signatureInfo, next) {
 				var updates = { };
-				if(expire == null || expire == 0)
-					updates.expires = null;
+				if(typeof signatureInfo.expiresOrig == "undefined")
+				{
+					signatureInfo.expiresOrig = signatureInfo.expires;
+					updates.expiresOrig = signatureInfo.expiresOrig;
+				}
+
+				if(signatureInfo.expiresOrig != null && (expire == null || signatureInfo.expiresOrig.getTime() > expire.getTime()))
+					updates.expires = signatureInfo.expiresOrig;
 				else
 					updates.expires = expire;
 
-				if(primary != null)
-				{
-					db.getEntry("keys_identities_signatures", [ "identity" ], { id: primary }, function(err, sigRecord) {
-						if(err) { callback(err); return; }
-
-						updates.primary_identity = sigRecord.identity;
-						update();
-					}, con);
-				}
-				else
-				{
-					updates.primary_identity = null;
-					update();
-				}
-
-				function update() {
-					db.update("keys", updates, { id: keyId }, callback, con);
-				}
-			});
+				keyring._updateSubkeySignature(keyId, subkeyId, signatureInfo.id, updates, next);
+			}, callback);
 		});
-	}, con);
-}
-
-function _checkSubkeyExpiration(keyring, keyId, parentId, callback) {
-	db.getEntry("keys", [ "binary" ], { id: keyId }, function(err, keyRecord) {
-		if(err) { callback(err); return; }
-
-		pgp.packetContent.getPublicKeyPacketInfo(keyRecord.binary, function(err, keyInfo) {
-			if(err) { callback(err); return; }
-
-			db.getEntries("keys_signatures", [ "date", "binary" ], { key: keyId, issuer: parentId, verified: true, sigtype: pgp.consts.SIG.SUBKEY }, 'ORDER BY "date" ASC', function(err, sigRecords) {
-				if(err) { callback(err); return; }
-
-				var expire = keyInfo.expires;
-
-				next();
-				function next() {
-					sigRecords.next(function(err, sigRecord) {
-						if(err === true) { end(); return; }
-						else if(err) { callback(err); return; }
-
-						pgp.packetContent.getSignaturePacketInfo(sigRecord.binary, function(err, sigInfo) {
-							if(err) { callback(err); return; }
-
-							if(sigInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE])
-								expire = new Date(keyInfo.date.getTime() + sigInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE][0].value*1000);
-							next();
-						});
-					});
-				}
-
-				function end() {
-					db.update("keys_signatures", { expires: expire }, { key: keyId, issuer: parentId, sigtype: pgp.consts.SIG.SUBKEY }, callback, con);
-				}
-			}, con);
-		});
-	}, con);
+	});
 }

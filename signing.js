@@ -1,4 +1,4 @@
-var config = require("./config");
+var config = require("./config.json");
 var child_process = require("child_process");
 var packets = require("./packets")
 var utils = require("./utils");
@@ -42,6 +42,9 @@ function verifySignature(keyring, callback) {
 
 function verifyXYSignature(keyring, keyId, signatureInfo, callback, getSubObject, subObjectType)
 {
+	if(signatureInfo.issuer == null)
+		return callback(null, false);
+
 	var buffers = [ ];
 	var issuerSecurity = null;
 
@@ -70,7 +73,7 @@ function verifyXYSignature(keyring, keyId, signatureInfo, callback, getSubObject
 
 				buffers.push(packets.generatePacket(consts.PKT.PUBLIC_KEY, keyInfo.binary));
 				next();
-			};
+			});
 		},
 		function(next) {
 			if(getSubObject == null)

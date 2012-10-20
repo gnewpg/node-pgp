@@ -7,20 +7,35 @@ var consts = require("./consts");
 var async = require("async");
 var utils = require("./utils");
 
+function getStreamKeyring(stream, callback) {
+	var ret = new _KeyringStream(stream);
+	ret.importKeys(stream, function(err) {
+		if(err)
+			callback(err);
+		else
+			callback(null, ret);
+	});
+}
+
 function getFileKeyring(fname, callback) {
 	var ret = new _KeyringFile(fname);
-	ret.revertChanges(callback);
+	ret.revertChanges(function(err) {
+		if(err)
+			callback(err);
+		else
+			callback(null, ret);
+	});
 }
 
-function _KeyringFile(filename) {
-	_KeyringFile.super_.call(this);
+function _KeyringStream(stream) {
+	_KeyringStream.super_.call(this);
 
-	this._filename = filename;
+	this._clear();
 }
 
-util.inherits(_KeyringFile, Keyring);
+util.inherits(_KeyringStream, Keyring);
 
-utils.extend(_KeyringFile.prototype, {
+utils.extend(_KeyringStream.prototype, {
 	getKeyList : function(filter) {
 		return Keyring._filter(_getList(this._keys), filter);
 	},
@@ -229,46 +244,7 @@ utils.extend(_KeyringFile.prototype, {
 		_remove(callback, this._attributeSignatures, keyId, attributeId, id);
 	},
 
-	saveChanges : function(callback) {
-		var t = this;
-		var stream = fs.createWriteStream(this._filename);
-
-		var opt = { tag : consts.PKT.PUBLIC_KEY, list : t.getKeyList, get : t.getKey, sub : [
-			{ tag : consts.PKT.SIGNATURE, list : t.getKeySignatureList, get : t.getKeySignature },
-			{ tag : consts.PKT.USER_ID, list : t.getIdentityList, get : t.getIdentity, sub : [
-				{ tag : consts.PKT.SIGNATURE, list : t.getIdentitySignatureList, get : t.getIdentitySignature }
-			] },
-			{ tag : consts.PKT.ATTRIBUTE, list : t.getAttributeList, get : t.getAttribute, sub : [
-				{ tag : consts.PKT.SIGNATURE, list : t.getAttributeSignatureList, get : t.getAttributeSignature }
-			] },
-			{ tag : consts.PKT.PUBLIC_SUBKEY, list : t.getSubkeyList, get : t.getSubkeyList, sub : [
-				{ tag: consts.PKT.SIGNATURE, list : t.getSubkeySignatureList, get : t.getSubkeySignature }
-			] }
-		] };
-
-		function goThroughList(opt, args, callback) {
-			opt.list.apply(t, args).forEachSeries(function(id, next1) {
-				var args2 = args.concat([ id ]);
-				opt.get.apply(t, args2.concat([ function(err, info) {
-					if(err)
-						return next1(err);
-
-					stream.write(packets.generatePacket(opt.tag, info.binary));
-
-					async.forEachSeries(opt.sub || [ ], function(sub, next2) {
-						goThroughList(sub, args2, next2);
-					}, next1);
-				} ]));
-			}, callback);
-		}
-
-		goThroughList(opt, [ ], function(err) {
-			stream.end();
-			callback(err);
-		});
-	},
-
-	revertChanges : function(callback) {
+	_clear : function() {
 		this._keys = { };
 		this._subkeys = { };
 		this._identities = { };
@@ -277,78 +253,42 @@ utils.extend(_KeyringFile.prototype, {
 		this._subkeySignatures = { };
 		this._identitySignatures = { };
 		this._attributeSignatures = { };
+	}
+});
 
-		var lastKeyId = null;
-		var lastSubkeyId = null;
-		var lastIdentityId = null;
-		var lastAttributeId = null;
+function _KeyringFile(filename) {
+	_KeyringFile.super_.call(this);
 
+	this._filename = filename;
+}
+
+util.inherits(_KeyringFile, _KeyringStream);
+
+utils.extend(_KeyringFile.prototype, {
+	saveChanges : function(callback) {
 		var t = this;
+		var stream = fs.createWriteStream(this._filename);
 
-		packets.splitPackets(fs.createReadStream(this._filename)).forEachSeries(function(tag, header, body, next) {
-			getPacketInfo(tag, body, function(err, info) {
-				if(err)
-					return callback(err);
+		t.getKeyList().forEachSeries(function(keyId, next) {
+			t.exportKey(keyId).whilst(function(data) {
+				stream.write(data);
+			}, next);
+		}, function(err) {
+			if(err)
+				callback(err);
+			else
+				stream.end();
+		});
+	},
 
-				switch(tag) {
-					case consts.PKT.PUBLIC_KEY:
-						lastKeyId = info.id;
-						lastSubkeyId = lastIdentityId = lastAttributeId = null;
-						t.addKey(info, next);
-						break;
-					case consts.PKT.PUBLIC_SUBKEY:
-						if(lastKeyId != null)
-						{
-							lastSubkeyId = info.id;
-							lastIdentityId = lastAttributeId = null;
-							t.addSubkey(lastKeyId, info, next);
-						}
-						else
-							next();
-						break;
-					case consts.PKT.USER_ID:
-						if(lastKeyId != null)
-						{
-							lastIdentityId = info.id;
-							lastSubkeyId = lastAttributeId = null;
-							t.addIdentity(lastKeyId, info, next);
-						}
-						else
-							next();
-						break;
-					case consts.PKT.ATTRIBUTE:
-						if(lastKeyId != null)
-						{
-							lastAttributeId = info.id;
-							lastSubkeyId = lastIdentityId = null;
-							t.addAttribute(lastKeyId, info, next);
-						}
-						else
-							next();
-						break;
-					case consts.PKT.SIGNATURE:
-						if(lastSubkeyId != null)
-							t.addSubkeySignature(lastKeyId, lastSubkeyId, info, next);
-						else if(lastIdentityId != null)
-							t.addIdentitySignature(lastKeyId, lastIdentityId, info, next);
-						else if(lastAttributeId != null)
-							t.addAttributeSignature(lastKeyId, lastAttributeId, info, next);
-						else if(lastKeyId != null)
-							t.addKeySignature(lastKeyId, info, next);
-						else
-							next();
-						break;
-					default:
-						next();
-						break;
-				}
-			});
-		}, callback);
+	revertChanges : function(callback) {
+		this._clear();
+		this._importKeys(fs.createReadStream(this._filename), callback);
 	}
 });
 
 function _getItem(obj, args, make) {
-	for(var i=offset; i<args.length; i++) {
+	for(var i=0; i<args.length; i++) {
 		if(obj[args[i]] == null)
 		{
 			if(make)
@@ -412,4 +352,5 @@ function _remove(callback, obj, idx) {
 		callback(new Error("Item not found."));
 }
 
+exports.getStreamKeyring = getStreamKeyring;
 exports.getFileKeyring = getFileKeyring;

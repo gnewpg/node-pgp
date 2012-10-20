@@ -9,28 +9,19 @@ Filter.get = function(filter) {
 	if(filter instanceof Filter)
 		return filter;
 	else if(Array.isArray(filter))
-		return new Filter.OneOf(filter);
+	{
+		var filters = [ ];
+		for(var i=0; i<filter.length; i++)
+			filters.push(Filter.get(filter[i]));
+		return new Filter.Or(filters);
+	}
 	else
 		return new Filter.Equals(filter);
-}
+};
 
 Filter.Equals = _valueFilter(function(val1, val2) {
 	return val1 == val2;
 });
-
-
-Filter.OneOf = function(values) {
-	for(var i=0; i<values.length; i++)
-		values[i] = _normaliseFilterValue(values[i]);
-
-	this.__values = values;
-};
-
-Util.inherits(Filter.OneOf, Filter);
-
-Filter.OneOf.prototype.check = function(checkValue) {
-	return this.__values.indexOf(_normaliseFilterValue(checkValue)) == -1;
-};
 
 
 Filter.LessThan = _valueFilter(function(val1, val2) {
@@ -63,7 +54,7 @@ Filter.Not.prototype.check = function(checkValue) {
 
 
 Filter.Or = function(filter) {
-	this.__filters = arguments;
+	this.__filters = Array.isArray(filter) ? filter : arguments;
 };
 
 util.inherits(Filter.Or, Filter);
@@ -79,7 +70,7 @@ Filter.Or.prototype.check = function(checkValue) {
 
 
 Filter.And = function(filter) {
-	this.__filters = arguments;
+	this.__filters = Array.isArray(filter) ? filter : arguments;
 };
 
 util.inherits(Filter.And, Filter);
