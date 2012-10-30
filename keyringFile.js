@@ -44,8 +44,8 @@ utils.extend(_KeyringStream.prototype, {
 		_exists(callback, this._keys, id);
 	},
 
-	getKey : function(id, callback) {
-		_get(callback, this._keys, id);
+	getKey : function(id, callback, fields) {
+		_get(callback, fields, this._keys, id);
 	},
 
 	_addKey : function(keyInfo, callback) {
@@ -68,8 +68,8 @@ utils.extend(_KeyringStream.prototype, {
 		_exists(callback, this._subkeys, keyId);
 	},
 
-	getSubkey : function(keyId, id, callback) {
-		_get(callback, this._subkeys, keyId);
+	getSubkey : function(keyId, id, callback, fields) {
+		_get(callback, fields, this._subkeys, keyId);
 	},
 
 	_addSubkey : function(keyId, subkeyInfo, callback) {
@@ -104,8 +104,8 @@ utils.extend(_KeyringStream.prototype, {
 		_exists(callback, this._identities, keyId);
 	},
 
-	getIdentity : function(keyId, id, callback) {
-		_get(callback, this._identities, keyId);
+	getIdentity : function(keyId, id, callback, fields) {
+		_get(callback, fields, this._identities, keyId);
 	},
 
 	_addIdentity : function(keyId, identityInfo, callback) {
@@ -128,8 +128,8 @@ utils.extend(_KeyringStream.prototype, {
 		_exists(callback, this._attributes, keyId);
 	},
 
-	getAttribute : function(keyId, id, callback) {
-		_get(callback, this._attributes, keyId);
+	getAttribute : function(keyId, id, callback, fields) {
+		_get(callback, fields, this._attributes, keyId);
 	},
 
 	_addAttribute : function(keyId, attributeInfo, callback) {
@@ -156,8 +156,8 @@ utils.extend(_KeyringStream.prototype, {
 		_exists(callback, this._keySignatures, keyId);
 	},
 
-	getKeySignature : function(keyId, id, callback) {
-		_get(callback, this._keySignatures, keyId);
+	getKeySignature : function(keyId, id, callback, fields) {
+		_get(callback, fields, this._keySignatures, keyId);
 	},
 
 	_addKeySignature : function(keyId, signatureInfo, callback) {
@@ -180,8 +180,8 @@ utils.extend(_KeyringStream.prototype, {
 		_exists(callback, this._subkeySignatures, keyId, subkeyId);
 	},
 
-	getSubkeySignature : function(keyId, subkeyId, id, callback) {
-		_get(callback, this._subkeySignatures, keyId, subkeyId);
+	getSubkeySignature : function(keyId, subkeyId, id, callback, fields) {
+		_get(callback, fields, this._subkeySignatures, keyId, subkeyId);
 	},
 
 	_addSubkeySignature : function(keyId, subkeyId, signatureInfo, callback) {
@@ -204,8 +204,8 @@ utils.extend(_KeyringStream.prototype, {
 		_get(callback, this._identitySignatures, keyId, identityId);
 	},
 
-	getIdentitySignature : function(keyId, identityId, id, callback) {
-		_get(callback, this._identitySignatures, keyId, identityId);
+	getIdentitySignature : function(keyId, identityId, id, callback, fields) {
+		_get(callback, fields, this._identitySignatures, keyId, identityId);
 	},
 
 	_addIdentitySignature : function(keyId, identityId, signatureInfo, callback) {
@@ -228,8 +228,8 @@ utils.extend(_KeyringStream.prototype, {
 		_get(callback, this._attributeSignatures, keyId, attributeId);
 	},
 
-	getAttributeSignature : function(keyId, attributeId, id, callback) {
-		_get(callback, this._attributeSignatures, keyId, attributeId);
+	getAttributeSignature : function(keyId, attributeId, id, callback, fields) {
+		_get(callback, fields, this._attributeSignatures, keyId, attributeId);
 	},
 
 	_addAttributeSignature : function(keyId, attributeId, signatureInfo, callback) {
@@ -311,13 +311,13 @@ function _exists(callback, obj, idx) {
 	callback(null, _getItem(obj, utils.toProperArray(arguments).slice(2)) != null);
 }
 
-function _get(callback, obj, idx) {
-	obj = _getItem(obj, utils.toProperArray(arguments).slice(2));
+function _get(callback, fields, obj, idx) {
+	obj = _getItem(obj, utils.toProperArray(arguments).slice(3));
 
 	if(obj == null)
 		callback(null, null);
 	else
-		callback(null, obj);
+		callback(null, Keyring._strip(obj, fields));
 }
 
 function _add(callback, item, obj, idx) {

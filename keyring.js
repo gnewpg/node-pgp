@@ -1,65 +1,12 @@
-var utils = require("./utils");
-var consts = require("./consts");
-var signing = require("./signing");
+var pgp = require("./index");
 var Filter = require("./keyringFilters");
 
-var p = utils.proxy;
+var p = pgp.utils.proxy;
 
 module.exports = Keyring;
 module.exports._filter = _filter;
+module.exports._strip = _strip;
 module.exports.Filter = Filter;
-
-/*
- * These are the relations that need to be calculated:
- * 1. Verify all kinds of signatures. For this, the signed key (plus the signed subkey, identity or attribute) and the issuer key need to be available.
- *    The signed key can be assumed to be available as else the signature wouldn't be there. This check needs to be done in the following cases:
- *     a) A signature is added. Verify it if the issuer key is available.
- *     b) A public key is added. Verify all unverified signatures issued by this key.
- * 2. Check if a key has been revoked. For this, it needs to be checked whether the key contains validated key revocation signatures. These are valid
- *    if the signature has been issued by the key itself, or it has been issued by a key whose fingerprint is set in a key or certification signature
- *    that contains a hashed sub-packet of the type SIGSUBPKT.REV_KEY. The revocation or expiration status of such a signature is irrelevant, as that
- *    would make revoking a revocation possible, which is not intended. This check needs to be done in the following cases:
- *     a) a revocation signature is verified by check 1. The key is revoked if the issuer is authorised.
- *     b) a key or certification signature is verified that contains a revocation key authorisation. Check 2a is re-run on all revocation signatures of the key.
- * 3. Check if a subkey has been revoked. This is the case if the key contains (verified) subkey revocation signatures. A subkey revocation signature is
- *    valid if it has been issued by a key that has also signed the key with a subkey binding signature ("parent key"), or by a key that has been authorised
- *    by the parent key to make revocations for it as described in check 2. A subkey revocation signature only revokes the subkey binding signature, not
- *    the key itself! (As that would make it possible for anyone to revoke a key by just signing it with a subkey binding signature.) This check needs
- *    to be done in the following cases:
- *     a) a subkey revocation signature is verified by check 1. The subkey binding signature is revoked if the issuer is authorised.
- *     b) a subkey binding signature is verified by check 1. Check 3a is rerun on all subkey revocation signatures of the key.
- *     c) a key or certification signature is verified that contains a revocation key authorisation. All subkey revocation signatures of all keys that
- *        contain a subkey binding signature of this key are checked again by check 3a.
- * 4. Check if a key or certification signature has been revoked. This is the case if the same key, identity or attribute contains a verified signature
- *    of the type SIG.CERT_REVOKE. Such a signature is valid if it has been issued by the same key that issued the signature that is being revoked, [or
- *    by a key that is authorised by that key to make revocations for it (as described in check 2)]. [A signature revocation signature may contain the hash
- *    of the signature it revokes in the SIGSUBPKT.SIGTARGET sub-packet, in that case it only revokes that specific signature.] Else it revokes all signatures
- *    issued by the same key on the same object on a date earlier than that of the revocation signature. SIGSUBPKT.REVOCABLE can prevent signatures
- *    from being revoked. This check needs to be done when:
- *     a) a signature revocation signature is verified. If the issuer is authorised and the signature being revoked are available, the revocation is performed
- *     b) any key or certification signature is _uploaded_. Search all verified signature revocation signatures if they revoke it.
- *     [c) a key or certification signature is verified that contains a revocation key authorisation. All signatures that have been made by this key need
- *        to be checked by check 4b.]
- * 5. Check the expiration date of a key. v3 keys contain an expiration date themselves, this is the default value. It can be overridden by making
- *    a v4 self-signature with the expiration date set in the SIGSUBPKT.KEY_EXPIRE sub-packet. The self-signature with the newest date that specifies
- *    a key expiration date is the relevant one. Subkey binding signatures can also contain a key expiration date. As we do not store subkeys and
- *    keys separately, in our database, we will set the expiration date of _all_ subkey binding signatures for the subkey by the same key to the
- *    key expiration date specified in the newest one of them (instead of setting the expiration date of the subkey itself). This check needs to be
- *    performed when:
- *     a) a self-signature is verified (check 1) that sets a key expiration date.
- *     b) a subkey binding signature is verified
- * 6. Check the primary identity of a key. This is set by the SIGSUBPKT.PRIMARY_UID subpacket in a self-signature of an identity. The one from the
- *    most recent self-signature counts. This check needs to be performed when:
- *     a) a self-signature is verified (check 1) that sets the primary ID.
- * 7. TODO: Check if there are any signatures that contain the sub packet consts.SIGSUBPKT.REV_KEY where the sensitive flag is set to true. These
- *    signatures may only be made public if there is a revocation signature by the key specified there.
- *     a) a signature with such a sensitive sub-packet is _uploaded_. If there are no revocation signatures issued by the specified authorised revoker on
- *        the key itself, its subkeys, its identities and its attributes, mark the signature as sensitive.
- *     b) a key is revoked by check 2 or 3 [or 4]. Check if the revoker has been authorised using a sensitive revocation authorisation signature, if so
- *        mark it as non-sensitive.
- * 8. Make sure that the security level of a key is inherited to the signatures it makes.
- *     a) A signature is verified. Set its security level to the lowest among its own and that of the key.
-*/
 
 function Keyring() {
 }
@@ -67,13 +14,13 @@ function Keyring() {
 Keyring.prototype = {
 	getKeyList : function(filter) { return _ef(); },
 
-	getKeys : function(filter) {
-		return _getItems(this.getKeyList(filter), p(this, this.getKey));
+	getKeys : function(filter, fields) {
+		return _getItems(this.getKeyList(filter), p(this, this.getKey), fields);
 	},
 
 	keyExists : function(id, callback) { _e(callback) },
 
-	getKey : function(id, callback) { _e(callback); },
+	getKey : function(id, callback, fields) { _e(callback); },
 
 	addKey : function(keyInfo, callback) {
 		_add(
@@ -99,13 +46,13 @@ Keyring.prototype = {
 
 	getSubkeyList : function(keyId, filter) { return _ef(); },
 
-	getSubkeys : function(keyId, filter) {
-		return _getItems(this.getSubkeyList(keyId, filter), async.apply(p(this, this.getSubkey), keyId));
+	getSubkeys : function(keyId, filter, fields) {
+		return _getItems(this.getSubkeyList(keyId, filter), async.apply(p(this, this.getSubkey), keyId), fields);
 	},
 
 	subkeyExists : function(keyId, id, callback) { _e(callback); },
 
-	getSubkey : function(keyId, id, callback) { _e(callback); },
+	getSubkey : function(keyId, id, callback, fields) { _e(callback); },
 
 	addSubkey : function(keyId, subkeyInfo, callback) {
 		_add(
@@ -131,19 +78,19 @@ Keyring.prototype = {
 
 	getParentKeyList : function(subkeyId) { _e(callback); },
 
-	getParentKeys : function(subkeyId) {
-		return _getItems(this.getParentKeyList(subkeyId), p(this, this.getKey));
+	getParentKeys : function(subkeyId, fields) {
+		return _getItems(this.getParentKeyList(subkeyId), p(this, this.getKey), fields);
 	},
 
 	getIdentityList : function(keyId, filter) { return _ef(); },
 
-	getIdentities : function(keyId, filter) {
-		return _getItems(this.getIdentityList(keyId, filter), async.apply(p(this, this.getIdentity), keyId));
+	getIdentities : function(keyId, filter, fields) {
+		return _getItems(this.getIdentityList(keyId, filter), async.apply(p(this, this.getIdentity), keyId), fields);
 	},
 
 	identityExists : function(keyId, id, callback) { _e(callback); },
 
-	getIdentity : function(keyId, id, callback) { _e(callback); },
+	getIdentity : function(keyId, id, callback, fields) { _e(callback); },
 
 	addIdentity : function(keyId, identityInfo, callback) {
 		this._addIdentity(keyId, identityInfo, callback);
@@ -161,13 +108,13 @@ Keyring.prototype = {
 
 	getAttributeList : function(keyId, filter) { return _ef(); },
 
-	getAttributes : function(keyId, filter) {
-		return _getItems(this.getAttributeList(keyId, filter), async.apply(p(this, this.getIdentity), keyId));
+	getAttributes : function(keyId, filter, fields) {
+		return _getItems(this.getAttributeList(keyId, filter), async.apply(p(this, this.getIdentity), keyId), fields);
 	},
 
 	attributeExists : function(keyId, id, callback) { _e(callback); },
 
-	getAttribute : function(keyId, id, callback) { _e(callback); },
+	getAttribute : function(keyId, id, callback, fields) { _e(callback); },
 
 	addAttribute : function(keyId, attributeInfo, callback) {
 		this._addAttribute(keyId, attributeInfo, callback);
@@ -185,12 +132,12 @@ Keyring.prototype = {
 
 	getKeySignatureList : function(keyId, filter) { return _ef(); },
 
-	getKeySignatures : function(keyId, filter) {
-		return _getItems(this.getKeySignatureList(keyId, filter), async.apply(p(this, this.getKeySignature), keyId));
+	getKeySignatures : function(keyId, filter, fields) {
+		return _getItems(this.getKeySignatureList(keyId, filter), async.apply(p(this, this.getKeySignature), keyId), fields);
 	},
 
 	getKeySignatureListByIssuer : function(issuerId, filter) {
-		filter = utils.extend({ }, filter, { issuer: issuerId });
+		filter = pgp.utils.extend({ }, filter, { issuer: issuerId });
 
 		var ret = new Fifo();
 		this.getKeyList().forEachSeries(p(this, function(keyId, next) {
@@ -204,10 +151,10 @@ Keyring.prototype = {
 
 	keySignatureExists : function(keyId, id, callback) { _e(callback); },
 
-	getKeySignature : function(keyId, id, callback) { _e(callback); },
+	getKeySignature : function(keyId, id, callback, fields) { _e(callback); },
 
 	addKeySignature : function(keyId, signatureInfo, callback) {
-		signing.verifyKeySignature(this, keyId, signatureInfo, p(this, function(err, verified) {
+		pgp.signing.verifyKeySignature(this, keyId, signatureInfo, p(this, function(err, verified) {
 			if(err)
 				callback(err);
 			else if(verified === null)
@@ -224,14 +171,14 @@ Keyring.prototype = {
 						this._addKeySignature(keyId, signatureInfo, callback);
 						callback();
 					}
-				}));
+				}), false);
 			}
 		}));
 	},
 
 	_addKeySignature : function(keyId, signatureInfo, callback) { _e(callback); },
 
-	_updateKeySignature : function(keyId, signatureId, callback) { _e(callback); },
+	_updateKeySignature : function(keyId, signatureId, fields, callback) { _e(callback); },
 
 	removeKeySignature : function(keyId, id, callback) {
 		this.getKeySignature(keyId, id, function(err, signatureInfo) {
@@ -249,12 +196,12 @@ Keyring.prototype = {
 
 	getSubkeySignatureList : function(keyId, subkeyId, filter) { return _ef(); },
 
-	getSubkeySignatures : function(keyId, subkeyId, filter) {
-		return _getItems(this.getSubkeySignatureList(keyId, subkeyId, filter), async.apply(p(this, this.getSubkeySignature), keyId, subkeyId));
+	getSubkeySignatures : function(keyId, subkeyId, filter, fields) {
+		return _getItems(this.getSubkeySignatureList(keyId, subkeyId, filter), async.apply(p(this, this.getSubkeySignature), keyId, subkeyId), fields);
 	},
 
 	getSubkeySignatureListByIssuer : function(issuerId, filter) {
-		filter = utils.extend({ }, filter, { issuer: issuerId });
+		filter = pgp.utils.extend({ }, filter, { issuer: issuerId });
 
 		var ret = new Fifo();
 		this.getKeyList().forEachSeries(p(this, function(keyId, next) {
@@ -270,10 +217,10 @@ Keyring.prototype = {
 
 	subkeySignatureExists : function(keyId, subkeyId, id, callback) { _e(callback); },
 
-	getSubkeySignature : function(keyId, subkeyId, id, callback) { _e(callback); },
+	getSubkeySignature : function(keyId, subkeyId, id, callback, fields) { _e(callback); },
 
 	addSubkeySignature : function(keyId, subkeyId, signatureInfo, callback) {
-		signing.verifySubkeySignature(this, keyId, subkeyId, signatureInfo, p(this, function(err, verified) {
+		pgp.signing.verifySubkeySignature(this, keyId, subkeyId, signatureInfo, p(this, function(err, verified) {
 			if(err)
 				callback(err);
 			else if(verified === null)
@@ -297,7 +244,7 @@ Keyring.prototype = {
 
 	_addSubkeySignature : function(keyId, subkeyId, signatureInfo, callback) { _e(callback); },
 
-	_updateSubkeySignature : function(keyId, subkeyId, signatureId, callback) { _e(callback); },
+	_updateSubkeySignature : function(keyId, subkeyId, signatureId, fields, callback) { _e(callback); },
 
 	removeSubkeySignature : function(keyId, subkeyId, id, callback) {
 		this.getSubkeySignature(keyId, subkeyId, id, function(err, signatureInfo) {
@@ -315,12 +262,12 @@ Keyring.prototype = {
 
 	getIdentitySignatureList : function(keyId, identityId, filter) { return _ef(); },
 
-	getIdentitySignatures : function(keyId, identityId, filter) {
-		return _getItems(this.getIdentitySignatureList(keyId, identityId, filter), async.apply(p(this, this.getIdentitySignature), keyId, identityId));
+	getIdentitySignatures : function(keyId, identityId, filter, fields) {
+		return _getItems(this.getIdentitySignatureList(keyId, identityId, filter), async.apply(p(this, this.getIdentitySignature), keyId, identityId), fields);
 	},
 
-	getIdentitySignatureListByIssuer : function(issuer, filter) {
-		filter = utils.extend({ }, filter, { issuer: issuerId });
+	getIdentitySignatureListByIssuer : function(issuerId, filter) {
+		filter = pgp.utils.extend({ }, filter, { issuer: issuerId });
 
 		var ret = new Fifo();
 		this.getKeyList().forEachSeries(p(this, function(keyId, next) {
@@ -336,10 +283,10 @@ Keyring.prototype = {
 
 	identitySignatureExists : function(keyId, identityId, id, callback) { _e(callback); },
 
-	getIdentitySignature : function(keyId, identityId, id, callback) { _e(callback); },
+	getIdentitySignature : function(keyId, identityId, id, callback, fields) { _e(callback); },
 
 	addIdentitySignature : function(keyId, identityId, signatureInfo, callback) {
-		signing.verifyIdentitySignature(this, keyId, identityId, signatureInfo, p(this, function(err, verified) {
+		pgp.signing.verifyIdentitySignature(this, keyId, identityId, signatureInfo, p(this, function(err, verified) {
 			if(err)
 				callback(err);
 			else if(verified === null)
@@ -363,7 +310,7 @@ Keyring.prototype = {
 
 	_addIdentitySignature : function(keyId, identityId, signatureInfo, callback) { _e(callback); },
 
-	_updateIdentitySignature : function(keyId, identityId, signatureId, callback) { _e(callback); },
+	_updateIdentitySignature : function(keyId, identityId, signatureId, fields, callback) { _e(callback); },
 
 	removeIdentitySignature : function(keyId, identityId, id, callback) {
 		this.getIdentitySignature(keyId, identityId, id, function(err, signatureInfo) {
@@ -381,12 +328,12 @@ Keyring.prototype = {
 
 	getAttributeSignatureList : function(keyId, attributeId, filter) { return _ef(); },
 
-	getAttributeSignatures : function(keyId, attributeId, filter) {
-		return _getItems(this.getAttributeSignatureList(keyId, attributeId, filter), async.apply(p(this, this.getAttributeSignature), keyId, attributeId));
+	getAttributeSignatures : function(keyId, attributeId, filter, fields) {
+		return _getItems(this.getAttributeSignatureList(keyId, attributeId, filter), async.apply(p(this, this.getAttributeSignature), keyId, attributeId), fields);
 	},
 
 	getAttributeSignatureListByIssuer : function(issuerId, filter) {
-		filter = utils.extend({ }, filter, { issuer: issuerId });
+		filter = pgp.utils.extend({ }, filter, { issuer: issuerId });
 
 		var ret = new Fifo();
 		this.getKeyList().forEachSeries(p(this, function(keyId, next) {
@@ -402,10 +349,10 @@ Keyring.prototype = {
 
 	attributeSignatureExists : function(keyId, attributeId, id, callback) { _e(callback); },
 
-	getAttributeSignature : function(keyId, attributeId, id, callback) { _e(callback); },
+	getAttributeSignature : function(keyId, attributeId, id, callback, fields) { _e(callback); },
 
 	addAttributeSignature : function(keyId, attributeId, signatureInfo, callback) {
-		signing.verifyAttributeSignature(this, keyId, attributeId, signatureInfo, p(this, function(err, verified) {
+		pgp.signing.verifyAttributeSignature(this, keyId, attributeId, signatureInfo, p(this, function(err, verified) {
 			if(err)
 				callback(err);
 			else if(verified === null)
@@ -429,7 +376,7 @@ Keyring.prototype = {
 
 	_addAttributeSignature : function(keyId, attributeId, signatureInfo, callback) { _e(callback); },
 
-	_updateAttributeSignature : function(keyId, attributeId, signatureId, callback) { _e(callback); },
+	_updateAttributeSignature : function(keyId, attributeId, signatureId, fields, callback) { _e(callback); },
 
 	removeAttributeSignature : function(keyId, attributeId, id, callback) {
 		this.getAttributeSignature(keyId, attributeId, id, function(err, signatureInfo) {
@@ -489,7 +436,7 @@ Keyring.prototype = {
 					return callback(err);
 
 				switch(tag) {
-					case consts.PKT.PUBLIC_KEY:
+					case pgp.consts.PKT.PUBLIC_KEY:
 						lastKeyId = info.id;
 						lastKeyImported = { type: tag, id: info.id, signatures: [ ], subkeys: [ ], identities: [ ], attributes: [ ] };
 						lastSubkeyId = lastIdentityId = lastAttributeId = null;
@@ -497,7 +444,7 @@ Keyring.prototype = {
 							lastKeyId = add(imported.keys, lastKeyImported, err, next);
 						});
 						break;
-					case consts.PKT.PUBLIC_SUBKEY:
+					case pgp.consts.PKT.PUBLIC_SUBKEY:
 						lastSubkeyId = info.id;
 						lastSubkeyImported = { type: tag, id: info.id, signatures: [ ] };
 						lastIdentityId = lastAttributeId = null;
@@ -512,7 +459,7 @@ Keyring.prototype = {
 						}
 
 						break;
-					case consts.PKT.USER_ID:
+					case pgp.consts.PKT.USER_ID:
 						lastIdentityId = info.id;
 						lastIdentityImported = { type: tag, id: info.id, signatures: [ ] };
 						lastSubkeyId = lastAttributeId = null;
@@ -527,7 +474,7 @@ Keyring.prototype = {
 						}
 
 						break;
-					case consts.PKT.ATTRIBUTE:
+					case pgp.consts.PKT.ATTRIBUTE:
 						lastAttributeId = info.id;
 						lastAttributeImported = { type: tag, id: info.id, signatures: [ ] };
 						lastSubkeyId = lastIdentityId = null;
@@ -542,7 +489,7 @@ Keyring.prototype = {
 						}
 
 						break;
-					case consts.PKT.SIGNATURE:
+					case pgp.consts.PKT.SIGNATURE:
 						var lastSignatureImported = { type: tag, id: info.id, issuer: info.issuer, date: info.date, sigtype: info.sigtype };
 
 						if(!acceptLocal && !info.exportable)
@@ -595,15 +542,15 @@ Keyring.prototype = {
 			selection = { };
 
 		var opts = [
-			{ tag : consts.PKT.SIGNATURE, list : t.getKeySignatureList, get : t.getKeySignature, selection: selection.signatures },
-			{ tag : consts.PKT.USER_ID, list : t.getIdentityList, get : t.getIdentity, selection: selection.identities, sub : [
-				{ tag : consts.PKT.SIGNATURE, list : t.getIdentitySignatureList, get : t.getIdentitySignature, selection: selection.signatures }
+			{ tag : pgp.consts.PKT.SIGNATURE, list : t.getKeySignatureList, get : t.getKeySignature, selection: selection.signatures },
+			{ tag : pgp.consts.PKT.USER_ID, list : t.getIdentityList, get : t.getIdentity, selection: selection.identities, sub : [
+				{ tag : pgp.consts.PKT.SIGNATURE, list : t.getIdentitySignatureList, get : t.getIdentitySignature, selection: selection.signatures }
 			] },
-			{ tag : consts.PKT.ATTRIBUTE, list : t.getAttributeList, get : t.getAttribute, selection: selection.attributes, sub : [
-				{ tag : consts.PKT.SIGNATURE, list : t.getAttributeSignatureList, get : t.getAttributeSignature, selection: selection.signatures }
+			{ tag : pgp.consts.PKT.ATTRIBUTE, list : t.getAttributeList, get : t.getAttribute, selection: selection.attributes, sub : [
+				{ tag : pgp.consts.PKT.SIGNATURE, list : t.getAttributeSignatureList, get : t.getAttributeSignature, selection: selection.signatures }
 			] },
-			{ tag : consts.PKT.PUBLIC_SUBKEY, list : t.getSubkeyList, get : t.getSubkeyList, selection: selection.subkeys, sub : [
-				{ tag: consts.PKT.SIGNATURE, list : t.getSubkeySignatureList, get : t.getSubkeySignature, selection: selection.signatures }
+			{ tag : pgp.consts.PKT.PUBLIC_SUBKEY, list : t.getSubkeyList, get : t.getSubkeyList, selection: selection.subkeys, sub : [
+				{ tag: pgp.consts.PKT.SIGNATURE, list : t.getSubkeySignatureList, get : t.getSubkeySignature, selection: selection.signatures }
 			] }
 		];
 
@@ -624,7 +571,7 @@ Keyring.prototype = {
 						}
 
 						next2();
-					} ]));
+					}, [ "id", "binary" ] ]));
 				}, callback);
 			}, callback);
 		}
@@ -647,7 +594,7 @@ function _ef() {
 	return ret;
 }
 
-function _getItems(list, getItem) {
+function _getItems(list, getItem, fields) {
 	var ret = new Fifo();
 	list.forEachSeries(function(id, next) {
 		getItem(id, function(err, item) {
@@ -658,29 +605,35 @@ function _getItems(list, getItem) {
 				ret._add(item);
 				next();
 			}
-		})
+		}, fields);
 	}, p(ret, ret._end));
 	return ret;
 }
 
 function _filter(list, filter) {
-	if(filter == null)
+	if(filter == null || Object.keys(filter).length == 0)
 		return list;
 
-	var ret = new Fifo();
-	list.forEachSeries(function(item, next) {
+	return Fifo.grep(list, function(item, callback) {
 		for(var i in filter)
 		{
 			if(!Filter.get(filter[i]).check(item[i]))
-			{
-				next();
-				return;
-			}
-			ret._add(item);
+				return callback(null, false);
 		}
-		next();
-	}, p(ret, ret._end));
-	return ret;
+		callback(null, true);
+	});
+}
+
+function _strip(list, fieldList) {
+	if(fieldList == null)
+		return list;
+
+	return Fifo.map(list, function(item, callback) {
+		var newItem = { };
+		for(var i in fieldList)
+			newItem[i] = item[i];
+		callback(null, newItem);
+	});
 }
 
 function _add(existsFunc, addFunc, removeFunc, funcs, callback) {
@@ -715,6 +668,61 @@ function _add(existsFunc, addFunc, removeFunc, funcs, callback) {
 	}
 }
 
+/*
+ * These are the relations that need to be calculated:
+ * 1. Verify all kinds of signatures. For this, the signed key (plus the signed subkey, identity or attribute) and the issuer key need to be available.
+ *    The signed key can be assumed to be available as else the signature wouldn't be there. This check needs to be done in the following cases:
+ *     a) A signature is added. Verify it if the issuer key is available.
+ *     b) A public key is added. Verify all unverified signatures issued by this key.
+ * 2. Check if a key has been revoked. For this, it needs to be checked whether the key contains validated key revocation signatures. These are valid
+ *    if the signature has been issued by the key itself, or it has been issued by a key whose fingerprint is set in a key or certification signature
+ *    that contains a hashed sub-packet of the type SIGSUBPKT.REV_KEY. The revocation or expiration status of such a signature is irrelevant, as that
+ *    would make revoking a revocation possible, which is not intended. This check needs to be done in the following cases:
+ *     a) a revocation signature is verified by check 1. The key is revoked if the issuer is authorised.
+ *     b) a key or certification signature is verified that contains a revocation key authorisation. Check 2a is re-run on all revocation signatures of the key.
+ * 3. Check if a subkey has been revoked. This is the case if the key contains (verified) subkey revocation signatures. A subkey revocation signature is
+ *    valid if it has been issued by a key that has also signed the key with a subkey binding signature ("parent key"), or by a key that has been authorised
+ *    by the parent key to make revocations for it as described in check 2. A subkey revocation signature only revokes the subkey binding signature, not
+ *    the key itself! (As that would make it possible for anyone to revoke a key by just signing it with a subkey binding signature.) This check needs
+ *    to be done in the following cases:
+ *     a) a subkey revocation signature is verified by check 1. The subkey binding signature is revoked if the issuer is authorised.
+ *     b) a subkey binding signature is verified by check 1. Check 3a is rerun on all subkey revocation signatures of the key.
+ *     c) a key or certification signature is verified that contains a revocation key authorisation. All subkey revocation signatures of all keys that
+ *        contain a subkey binding signature of this key are checked again by check 3a.
+ * 4. Check if a key or certification signature has been revoked. This is the case if the same key, identity or attribute contains a verified signature
+ *    of the type SIG.CERT_REVOKE. Such a signature is valid if it has been issued by the same key that issued the signature that is being revoked, [or
+ *    by a key that is authorised by that key to make revocations for it (as described in check 2)]. [A signature revocation signature may contain the hash
+ *    of the signature it revokes in the SIGSUBPKT.SIGTARGET sub-packet, in that case it only revokes that specific signature.] Else it revokes all signatures
+ *    issued by the same key on the same object on a date earlier than that of the revocation signature. SIGSUBPKT.REVOCABLE can prevent signatures
+ *    from being revoked. This check needs to be done when:
+ *     a) a signature revocation signature is verified. If the issuer is authorised and the signature being revoked are available, the revocation is performed
+ *     b) any key or certification signature is _uploaded_. Search all verified signature revocation signatures if they revoke it.
+ *     [c) a key or certification signature is verified that contains a revocation key authorisation. All signatures that have been made by this key need
+ *        to be checked by check 4b.]
+ * 5. Check the expiration date of a key. v3 keys contain an expiration date themselves, this is the default value. It can be overridden by making
+ *    a v4 self-signature with the expiration date set in the SIGSUBPKT.KEY_EXPIRE sub-packet. The self-signature with the newest date that specifies
+ *    a key expiration date is the relevant one. Subkey binding signatures can also contain a key expiration date. As we do not store subkeys and
+ *    keys separately, in our database, we will set the expiration date of _all_ subkey binding signatures for the subkey by the same key to the
+ *    key expiration date specified in the newest one of them (instead of setting the expiration date of the subkey itself). This check needs to be
+ *    performed when:
+ *     a) a self-signature is verified (check 1) that sets a key expiration date.
+ *     b) a subkey binding signature is verified
+ * 6. Check the primary identity of a key. This is set by the SIGSUBPKT.PRIMARY_UID subpacket in a self-signature of an identity. The one from the
+ *    most recent self-signature counts. This check needs to be performed when:
+ *     a) a self-signature is verified (check 1) that sets the primary ID.
+ * 7. TODO: Check if there are any signatures that contain the sub packet consts.SIGSUBPKT.REV_KEY where the sensitive flag is set to true. These
+ *    signatures may only be made public if there is a revocation signature by the key specified there.
+ *     a) a signature with such a sensitive sub-packet is _uploaded_. If there are no revocation signatures issued by the specified authorised revoker on
+ *        the key itself, its subkeys, its identities and its attributes, mark the signature as sensitive.
+ *     b) a key is revoked by check 2 or 3 [or 4]. Check if the revoker has been authorised using a sensitive revocation authorisation signature, if so
+ *        mark it as non-sensitive.
+ * 8. Make sure that the security level of a key is inherited to the signatures it makes.
+ *     a) A signature is verified. Set its security level to the lowest among its own and that of the key.
+*/
+
+/**
+ * @param [remove]
+ */
 function _keySignatureVerified(keyring, keyId, signatureInfo, callback, remove) {
 	var checks = [ ];
 
@@ -789,16 +797,22 @@ function _verifySignaturesByKey(keyring, keyId, callback) {
 			keyring.getKeySignatureListByIssuer(keyId, { verified: false }).forEachSeries(function(sig, next2) {
 				async.waterfall([
 					function(next3) {
-						keyring.getKeySignature(sig.keyId, sig.signatureId, next3);
+						keyring.getKeySignature(sig.keyId, sig.signatureId, next3, [ "issuer", "security" ]);
 					},
 					function(signatureInfo, next3) {
-						signing.verifyKeySignature(this, sig.keyId, signatureInfo, async.apply(next3, signatureInfo));
+						pgp.signing.verifyKeySignature(this, sig.keyId, signatureInfo, async.apply(next3, signatureInfo));
 					},
 					function(signatureInfo, verified, next3) {
 						if(!verified)
 							keyring.removeKeySignature(sig.keyId, sig.signatureId, next3);
 						else
-							_keySignatureVerified(keyring, sig.keyId, signatureInfo, next3);
+						{
+							keyring._updateKeySignature(sig.keyId, sig.signatureId, { verified: signatureInfo.verified, security: signatureInfo.security }, function(err) {
+								if(err)
+									return next3(err);
+								_keySignatureVerified(keyring, sig.keyId, signatureInfo, next3);
+							});
+						}
 					}
 				], next2);
 			}, next);
@@ -807,16 +821,22 @@ function _verifySignaturesByKey(keyring, keyId, callback) {
 			keyring.getSubkeySignatureListByIssuer(keyId, { verified: false }).forEachSeries(function(sig, next2) {
 				async.waterfall([
 					function(next3) {
-						keyring.getSubkeySignature(sig.keyId, sig.subkeyId, sig.signatureId, next3);
+						keyring.getSubkeySignature(sig.keyId, sig.subkeyId, sig.signatureId, next3, [ "issuer", "security" ]);
 					},
 					function(signatureInfo, next3) {
-						signing.verifySubkeySignature(this, sig.keyId, sig.subkeyId, signatureInfo, async.apply(next3, signatureInfo));
+						pgp.signing.verifySubkeySignature(this, sig.keyId, sig.subkeyId, signatureInfo, async.apply(next3, signatureInfo));
 					},
 					function(signatureInfo, verified, next3) {
 						if(!verified)
 							keyring.removeSubkeySignature(sig.keyId, sig.subkeyId, sig.signatureId, next3);
 						else
-							_subkeySignatureVerified(keyring, sig.keyId, sig.subkeyId, signatureInfo, next3);
+						{
+							keyring._updateSubkeySignature(sig.keyId, sig.subkeyId, { verified: signatureInfo.verified, security: signatureInfo.security }, function(err) {
+								if(err)
+									return next3(err);
+								_subkeySignatureVerified(keyring, sig.keyId, sig.subkeyId, signatureInfo, next3);
+							});
+						}
 					}
 				], next2);
 			}, next);
@@ -825,16 +845,22 @@ function _verifySignaturesByKey(keyring, keyId, callback) {
 			keyring.getIdentitySignatureListByIssuer(keyId, { verified: false }).forEachSeries(function(sig, next2) {
 				async.waterfall([
 					function(next3) {
-						keyring.getIdentitySignature(sig.keyId, sig.identityId, sig.signatureId, next3);
+						keyring.getIdentitySignature(sig.keyId, sig.identityId, sig.signatureId, next3, [ "issuer", "security" ]);
 					},
 					function(signatureInfo, next3) {
-						signing.verifyIdentitySignature(this, keyId, sig.identityId, signatureInfo, async.apply(next3, signatureInfo));
+						pgp.signing.verifyIdentitySignature(this, keyId, sig.identityId, signatureInfo, async.apply(next3, signatureInfo));
 					},
 					function(signatureInfo, verified, next3) {
 						if(!verified)
 							keyring.removeIdentitySignature(sig.keyId, sig.identityId, sig.signatureId, next3);
 						else
-							_identitySignatureVerified(keyring, sig.keyId, sig.identityId, signatureInfo, next3);
+						{
+							keyring._updateIdentitySignature(sig.keyId, sig.identityId, { verified: signatureInfo.verified, security: signatureInfo.security }, function(err) {
+								if(err)
+									return next3(err);
+								_identitySignatureVerified(keyring, sig.keyId, sig.identityId, signatureInfo, next3);
+							});
+						}
 					}
 				], next2);
 			}, next);
@@ -843,16 +869,22 @@ function _verifySignaturesByKey(keyring, keyId, callback) {
 			keyring.getAttributeSignatureListByIssuer(keyId, { verified: false }).forEachSeries(function(sig, next2) {
 				async.waterfall([
 					function(next3) {
-						keyring.getAttributeSignature(sig.keyId, sig.attributeId, sig.signatureId, next3);
+						keyring.getAttributeSignature(sig.keyId, sig.attributeId, sig.signatureId, next3, [ "issuer", "security" ]);
 					},
 					function(signatureInfo, next3) {
-						signing.verifyAttributeSignature(this, keyId, sig.attributeId, signatureInfo, async.apply(next3, signatureInfo));
+						pgp.signing.verifyAttributeSignature(this, keyId, sig.attributeId, signatureInfo, async.apply(next3, signatureInfo));
 					},
 					function(signatureInfo, verified, next3) {
 						if(!verified)
 							keyring.removeAttributeSignature(sig.keyId, sig.attributeId, sig.signatureId, next3);
 						else
-							_attributeSignatureVerified(keyring, sig.keyId, sig.attributeId, signatureInfo, next3);
+						{
+							keyring._updateAttributeSignature(sig.keyId, sig.attributeId, { verified: signatureInfo.verified, security: signatureInfo.security }, function(err) {
+								if(err)
+									return next3(err);
+								_attributeSignatureVerified(keyring, sig.keyId, sig.attributeId, signatureInfo, next3);
+							});
+						}
 					}
 				], next2);
 			}, next);
@@ -912,7 +944,7 @@ function _checkSubkeyRevocationStatus(keyring, keyId, subkeyId, callback) {
 
 function _isAuthorisedRevoker(keyring, keyId, issuerId, callback) {
 	var fifos = [ ];
-	var issuerInfo = null;
+	var fingerprint = null;
 	async.series([
 		function(next) {
 			keyring.getKey(issuerId, function(err, keyInfo) {
@@ -922,24 +954,24 @@ function _isAuthorisedRevoker(keyring, keyId, issuerId, callback) {
 					callback(null, false);
 				else
 				{
-					issuerInfo = keyInfo;
+					fingerprint = keyInfo.fingerprint;
 					next();
 				}
-			});
+			}, [ "fingerprint" ]);
 		},
 		function(next) {
-			fifos.push(keyring.getKeySignatures(keyId, { sigtype: pgp.consts.SIG.KEY, verified: true }));
+			fifos.push(keyring.getKeySignatures(keyId, { sigtype: pgp.consts.SIG.KEY, verified: true }, [ "hashedSubPackets" ]));
 			next();
 		},
 		function(next) {
 			keyring.getIdentityList(keyId).forEachSeries(function(identityId, next) {
-				fifos.push(keyring.getIdentitySignatures(keyId, identityId, { sigtype: [ pgp.consts.SIG.CERT_0, pgp.consts.SIG.CERT_1, pgp.consts.SIG.CERT_2, pgp.consts.SIG.CERT_3 ], verified: true }));
+				fifos.push(keyring.getIdentitySignatures(keyId, identityId, { sigtype: [ pgp.consts.SIG.CERT_0, pgp.consts.SIG.CERT_1, pgp.consts.SIG.CERT_2, pgp.consts.SIG.CERT_3 ], verified: true }, [ "hashedSubPackets" ]));
 				next();
 			}, next);
 		},
 		function(next) {
 			keyring.getAttributeList(keyId).forEachSeries(function(attributeId, next) {
-				fifos.push(keyring.getAttributeSignatures(keyId, attributeId, { sigtype: [ pgp.consts.SIG.CERT_0, pgp.consts.SIG.CERT_1, pgp.consts.SIG.CERT_2, pgp.consts.SIG.CERT_3 ], verified: true }));
+				fifos.push(keyring.getAttributeSignatures(keyId, attributeId, { sigtype: [ pgp.consts.SIG.CERT_0, pgp.consts.SIG.CERT_1, pgp.consts.SIG.CERT_2, pgp.consts.SIG.CERT_3 ], verified: true }, [ "hashedSubPackets" ]));
 				next();
 			}, next);
 		},
@@ -949,7 +981,7 @@ function _isAuthorisedRevoker(keyring, keyId, issuerId, callback) {
 				{
 					for(var i=0; i<signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.REV_KEY].length; i++)
 					{
-						if(signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.REV_KEY][i].value == issuerInfo.fingerprint)
+						if(signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.REV_KEY][i].value == fingerprint)
 							callback(null, true);
 						else
 							next();
@@ -972,8 +1004,8 @@ function _checkSignatureRevocationStatus(keyring, keyId, callback, remove) {
 				next();
 		},
 		function(next) {
-			keyring.getKeySignatures(keyId, { verified: true, sigtype: pgp.consts.SIG.CERT_REVOK }).forEachSeries(function(revSignatureInfo, next) {
-				keyring.getKeySignatures(keyId, { issuer: revSignatureInfo.issuer, sigtype: [ pgp.consts.SIG.KEY, pgp.consts.SIG.KEY_BY_SUBKEY ], date: new Filter.LessThan(revSignatureInfo.date) }).forEachSeries(function(signatureInfo, next) {
+			keyring.getKeySignatures(keyId, { verified: true, sigtype: pgp.consts.SIG.CERT_REVOK }, [ "id", "issuer", "date" ]).forEachSeries(function(revSignatureInfo, next) {
+				keyring.getKeySignatures(keyId, { issuer: revSignatureInfo.issuer, sigtype: [ pgp.consts.SIG.KEY, pgp.consts.SIG.KEY_BY_SUBKEY ], date: new Filter.LessThan(revSignatureInfo.date) }, [ "id", "hashedSubPackets" ]).forEachSeries(function(signatureInfo, next) {
 					if(!signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.REVOCABLE] || !signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.REVOCABLE][0].value)
 						keyring._updateKeySignature(keyId, signatureInfo.id, { revoked: revSignatureInfo.id }, next);
 					else
@@ -983,10 +1015,10 @@ function _checkSignatureRevocationStatus(keyring, keyId, callback, remove) {
 		},
 		function(next) {
 			keyring.getIdentityList(keyId).forEachSeries(function(identityId, next) {
-				keyring.getIdentitySignatures(keyId, identityId, { verified: true, sigtype: pgp.consts.SIG.CERT_REVOK }).forEachSeries(function(revSignatureInfo, next) {
-					keyring.getIdentitySignatures(keyId, identityId, { issuer: revSignatureInfo.issuer, sigtype: [ pgp.consts.SIG.CERT_0, pgp.consts.SIG.CERT_1, pgp.consts.SIG.CERT_2, pgp.consts.SIG.CERT_3 ], date: new Filter.LessThan(revSignatureInfo.date) }).forEachSeries(function(signatureInfo, next) {
+				keyring.getIdentitySignatures(keyId, identityId, { verified: true, sigtype: pgp.consts.SIG.CERT_REVOK }, [ "id", "issuer", "date" ]).forEachSeries(function(revSignatureInfo, next) {
+					keyring.getIdentitySignatures(keyId, identityId, { issuer: revSignatureInfo.issuer, sigtype: [ pgp.consts.SIG.CERT_0, pgp.consts.SIG.CERT_1, pgp.consts.SIG.CERT_2, pgp.consts.SIG.CERT_3 ], date: new Filter.LessThan(revSignatureInfo.date) }, [ "id", "hashedSubPackets" ]).forEachSeries(function(signatureInfo, next) {
 						if(!signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.REVOCABLE] || !signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.REVOCABLE][0].value)
-							keyring._updateIdentitySignature(keyId, identityId, signatureId, { revoked: revSignatureInfo.id }, next);
+							keyring._updateIdentitySignature(keyId, identityId, signatureInfo.id, { revoked: revSignatureInfo.id }, next);
 						else
 							next();
 					}, next);
@@ -995,10 +1027,10 @@ function _checkSignatureRevocationStatus(keyring, keyId, callback, remove) {
 		},
 		function(next) {
 			keyring.getAttributeList(keyId).forEachSeries(function(attributeId, next) {
-				keyring.getAttributeSignatures(keyId, attributeId, { verified: true, sigtype: pgp.consts.SIG.CERT_REVOK }).forEachSeries(function(revSignatureInfo, next) {
-					keyring.getAttributeSignatures(keyId, attributeId, { issuer: revSignatureInfo.issuer, sigtype: [ pgp.consts.SIG.CERT_0, pgp.consts.SIG.CERT_1, pgp.consts.SIG.CERT_2, pgp.consts.SIG.CERT_3 ], date: new Filter.LessThan(revSignatureInfo.date) }).forEachSeries(function(signatureInfo, next) {
+				keyring.getAttributeSignatures(keyId, attributeId, { verified: true, sigtype: pgp.consts.SIG.CERT_REVOK }, [ "id", "issuer", "date" ]).forEachSeries(function(revSignatureInfo, next) {
+					keyring.getAttributeSignatures(keyId, attributeId, { issuer: revSignatureInfo.issuer, sigtype: [ pgp.consts.SIG.CERT_0, pgp.consts.SIG.CERT_1, pgp.consts.SIG.CERT_2, pgp.consts.SIG.CERT_3 ], date: new Filter.LessThan(revSignatureInfo.date) }, [ "id", "hashedSubPackets" ]).forEachSeries(function(signatureInfo, next) {
 						if(!signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.REVOCABLE] || !signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.REVOCABLE][0].value)
-							keyring._updateAttributeSignature(keyId, attributeId, signatureId, { revoked: revSignatureInfo.id }, next);
+							keyring._updateAttributeSignature(keyId, attributeId, signatureInfo.id, { revoked: revSignatureInfo.id }, next);
 						else
 							next();
 					}, next);
@@ -1011,7 +1043,7 @@ function _checkSignatureRevocationStatus(keyring, keyId, callback, remove) {
 function _resetSignatureRevocationStatus(keyring, keyId, callback) {
 	async.series([
 		function(next) {
-			keyring.getKeySignatures(keyId, { sigtype: [ pgp.consts.SIG.KEY, pgp.consts.SIG.KEY_BY_SUBKEY ] }).forEachSeries(function(signatureInfo, next) {
+			keyring.getKeySignatures(keyId, { sigtype: [ pgp.consts.SIG.KEY, pgp.consts.SIG.KEY_BY_SUBKEY ] }, [ "id", "revoked" ]).forEachSeries(function(signatureInfo, next) {
 				if(signatureInfo.revoked)
 					keyring._updateKeySignature(keyId, signatureInfo.id, { revoked: null }, next);
 				else
@@ -1020,7 +1052,7 @@ function _resetSignatureRevocationStatus(keyring, keyId, callback) {
 		},
 		function(next) {
 			keyring.getIdentityList(keyId, function(identityId, next) {
-				keyring.getIdentitySignatures(keyId, identityId, { sigtype: [ pgp.consts.SIG.CERT_0, pgp.consts.SIG.CERT_1, pgp.consts.SIG.CERT_2, pgp.consts.SIG.CERT_3 ] }).forEachSeries(function(signatureInfo, next) {
+				keyring.getIdentitySignatures(keyId, identityId, { sigtype: [ pgp.consts.SIG.CERT_0, pgp.consts.SIG.CERT_1, pgp.consts.SIG.CERT_2, pgp.consts.SIG.CERT_3 ] }, [ "id", "revoked" ]).forEachSeries(function(signatureInfo, next) {
 					if(signatureInfo.revoked)
 						keyring._updateIdentitySignature(keyId, identityId, signatureInfo.id, { revoked: null }, next);
 					else
@@ -1030,7 +1062,7 @@ function _resetSignatureRevocationStatus(keyring, keyId, callback) {
 		},
 		function(next) {
 			keyring.getAttributeList(keyId, function(attributeId, next) {
-				keyring.getAttributeSignatures(keyId, attributeId, { sigtype: [ pgp.consts.SIG.CERT_0, pgp.consts.SIG.CERT_1, pgp.consts.SIG.CERT_2, pgp.consts.SIG.CERT_3 ] }).forEachSeries(function(signatureInfo, next) {
+				keyring.getAttributeSignatures(keyId, attributeId, { sigtype: [ pgp.consts.SIG.CERT_0, pgp.consts.SIG.CERT_1, pgp.consts.SIG.CERT_2, pgp.consts.SIG.CERT_3 ] }, [ "id", "revoked" ]).forEachSeries(function(signatureInfo, next) {
 					if(signatureInfo.revoked)
 						keyring._updateAttributeSignature(keyId, attributeId, signatureInfo.id, { revoked: null }, next);
 					else
@@ -1039,35 +1071,6 @@ function _resetSignatureRevocationStatus(keyring, keyId, callback) {
 			}, next);
 		}
 	], callback);
-}
-
-function _getAllSignatures(keyring, keyId, filter) {
-	var ret = new Fifo();
-	async.series([
-		function(next) {
-			keyring.getKeySignatures(keyId, filter).forEachSeries(function(signatureInfo, next) {
-				ret._add(signatureInfo);
-				next();
-			}, next);
-		},
-		function(next) {
-			keyring.getIdentityList(keyId).forEachSeries(function(identityId, next) {
-				keyring.getIdentitySignatures(keyId, identityId, filter).forEachSeries(function(signatureInfo, next) {
-					ret._add(signatureInfo);
-					next();
-				}, next);
-			}, next);
-		},
-		function(next) {
-			keyring.getAttributeList(keyId).forEachSeries(function(attributeId, next) {
-				keyring.getAttributeSignatures(keyId, attributeId, filter).forEachSeries(function(signatureInfo, next) {
-					ret._add(signatureInfo);
-					next();
-				}, next);
-			}, next);
-		}
-	], p(ret, ret._end));
-	return ret;
 }
 
 // Check 5a, 6: Check self-signatures for expiration date and primary id
@@ -1111,16 +1114,16 @@ function _checkSelfSignatures(keyring, keyId, callback) {
 
 		async.series([
 			function(next) {
-				keyring.getKeySignatures(keyId, filter).forEachSeries(checkExpire, next);
+				keyring.getKeySignatures(keyId, filter, [ "hashedSubPackets", "date" ]).forEachSeries(checkExpire, next);
 			},
 			function(next) {
 				keyring.getIdentityList(keyId).forEachSeries(function(identityId, next) {
-					keyring.getIdentitySignatures(keyId, identityId, filter).forEachSeries(async.apply(checkPrimaryAndExpire, identityId), next);
+					keyring.getIdentitySignatures(keyId, identityId, filter, [ "hashedSubPackets", "date" ]).forEachSeries(async.apply(checkPrimaryAndExpire, identityId), next);
 				}, next);
 			},
 			function(next) {
 				keyring.getAttributeList(keyId).forEachSeries(function(attributeId, next) {
-					keyring.getAttributeSignatures(keyId, attributeId, filter).forEachSeries(checkExpire, next);
+					keyring.getAttributeSignatures(keyId, attributeId, filter, [ "hashedSubPackets", "date" ]).forEachSeries(checkExpire, next);
 				}, next);
 			}
 		], function(err) {
@@ -1132,7 +1135,7 @@ function _checkSelfSignatures(keyring, keyId, callback) {
 
 			keyring._updateKey(keyId, updates, callback);
 		});
-	});
+	}, [ "expires", "expiresOrig", "date" ]);
 }
 
 function _checkSubkeyExpiration(keyring, keyId, subkeyId, callback) {
@@ -1143,7 +1146,7 @@ function _checkSubkeyExpiration(keyring, keyId, subkeyId, callback) {
 		var expire = null;
 		var expireDate = -1;
 
-		keyring.getSubkeySignatures(keyId, subkeyId, { verified: true, sigtype: pgp.consts.SIG.SUBKEY }).forEachSeries(function(signatureInfo, next) {
+		keyring.getSubkeySignatures(keyId, subkeyId, { verified: true, sigtype: pgp.consts.SIG.SUBKEY }, [ "date", "hashedSubPackets" ]).forEachSeries(function(signatureInfo, next) {
 			if(signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE] && signatureInfo.date && signatureInfo.date.getTime() > expireDate)
 			{
 				if(signatureInfo.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE][0].value == 0)
@@ -1158,7 +1161,7 @@ function _checkSubkeyExpiration(keyring, keyId, subkeyId, callback) {
 			if(err)
 				return callback(err);
 
-			keyring.getSubkeySignatures(keyId, subkeyId, { sigtype: pgp.consts.SIG.SUBKEY }).forEachSeries(function(signatureInfo, next) {
+			keyring.getSubkeySignatures(keyId, subkeyId, { sigtype: pgp.consts.SIG.SUBKEY }, [ "id", "expiresOrig", "expires" ]).forEachSeries(function(signatureInfo, next) {
 				var updates = { };
 				if(typeof signatureInfo.expiresOrig == "undefined")
 				{
@@ -1174,5 +1177,5 @@ function _checkSubkeyExpiration(keyring, keyId, subkeyId, callback) {
 				keyring._updateSubkeySignature(keyId, subkeyId, signatureInfo.id, updates, next);
 			}, callback);
 		});
-	});
+	}, [ "date" ]);
 }

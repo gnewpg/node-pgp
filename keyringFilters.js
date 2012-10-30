@@ -39,7 +39,7 @@ Filter.GreaterThan = _valueFilter(function(val1, val2) {
 });
 
 
-Filter.greaterThanOrEqual = _valueFilter(function(val1, val2) {
+Filter.GreaterThanOrEqual = _valueFilter(function(val1, val2) {
 	return val1 != null && val2 != null && val1 >= val2;
 });
 

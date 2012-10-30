@@ -1,4 +1,4 @@
-var config = require("./config");
+var config = require("./config.json");
 var fs = require("fs");
 var crypto = require("crypto");
 var consts = require("./consts");
@@ -67,8 +67,21 @@ function proxy(context, func) {
 	}
 }
 
+function extend(obj1, obj2) {
+	for(var i=1; i<arguments.length; i++)
+	{
+		if(arguments[i])
+		{
+			for(var j in arguments[i])
+				obj1[j] = arguments[i][j];
+		}
+	}
+	return obj1;
+};
+
 exports.getTempFilename = getTempFilename;
 exports.hash = hash;
 exports.toProperArray = toProperArray;
 exports.indexOf = indexOf;
 exports.proxy = proxy;
+exports.extend = extend;

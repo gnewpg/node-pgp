@@ -5,6 +5,8 @@ module.exports = Fifo;
 module.exports.fromArraySingle = function(arr) { return new ArraySingle(arr); };
 module.exports.fromArrayMultiple = function(arr) { return new ArrayMultiple(arr); };
 module.exports.concat = function(fifos) { return new Multiple(fifos); };
+module.exports.grep = function(fifo, grepFunc) { return new Grep(fifo, grepFunc); };
+module.exports.map = function(fifo, mapFunc) { return new Map(fifo, mapFunc); };
 
 function Fifo() {
 	this.__listeners = [ ];
@@ -96,16 +98,16 @@ function ArraySingle(array) {
 	this.__i = 0;
 }
 
-ArraySingle.prototype = {
+util.inherits(ArraySingle, Fifo);
+
+utils.extend(ArraySingle.prototype, {
 	next : function(callback) {
 		if(this.__i >= this.__array.length)
 			callback(true);
 		else
 			callback(null, this.__array[this.__i++]);
-	},
-
-	forEachSeries : Fifo.prototype.forEachSeries
-};
+	}
+});
 
 function ArrayMultiple(array) {
 	ArraySingle.apply(this, arguments);
@@ -129,7 +131,9 @@ function Multiple(fifos) {
 	this.__i = 0;
 }
 
-Multiple.prototype = {
+util.inherits(Multiple, Fifo);
+
+utils.extend(Multiple.prototype, {
 	next : function(callback) {
 		if(this.__i >= this.__fifos.length)
 			callback(true);
@@ -145,7 +149,52 @@ Multiple.prototype = {
 					callback.apply(null, arguments);
 			}));
 		}
-	},
+	}
+});
 
-	forEachSeries : fifo.prototype.forEachSeries
-};
+
+function Grep(fifo, grepFunc, sync) {
+	this.__fifo = fifo;
+	this.__grepFunc = grepFunc;
+}
+
+util.inherits(Grep, Fifo);
+
+utils.extend(Grep.prototype, {
+	next : function(callback) {
+		this.__fifo.next(utils.proxy(this, function(err, val) {
+			if(err)
+				return callback(err);
+
+			var args = utils.toProperArray(arguments).slice(1);
+			this.__grepFunc.apply(null, args.concat([ utils.proxy(this, function(err, doAdd) {
+				if(err)
+					callback(err);
+				else if(doAdd)
+					callback(null, [ null ].concat(args));
+				else
+					this.next(callback);
+			}) ]));
+		}));
+	}
+});
+
+
+function Map(fifo, mapFunc) {
+	this.__fifo = fifo;
+	this.__mapFunc = mapFunc;
+}
+
+util.inherits(Map, Fifo);
+
+utils.extend(Map.prototype, {
+	next : function(callback) {
+		this.__fifo.next(utils.proxy(this, function(err, val) {
+			if(err)
+				return callback(err);
+
+			var args = utils.toProperArray(arguments).slice(1);
+			this.__mapFunc.apply(null, args.concat([ callback ]));
+		}));
+	}
+});

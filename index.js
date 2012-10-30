@@ -6,8 +6,10 @@ module.exports = {
 	packets : require("./packets"),
 	signing : require("./signing"),
 	consts : require("./consts"),
-	config : require("./config"),
+	config : require("./config.json"),
 	Fifo : require("./fifo"),
 	utils : require("./utils"),
-	encryption : require("./encryption")
+	encryption : require("./encryption"),
+	Keyring : require("./keyring"),
+	keyringFile : require("./keyringFile")
 };
