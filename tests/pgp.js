@@ -392,7 +392,7 @@ exports.headers = function(test) {
 };
 
 exports.key1 = function(test) {
-	test.expect(27);
+	test.expect(23);
 	
 	var key = null, id = null, sig = null;
 
@@ -449,21 +449,8 @@ exports.key1 = function(test) {
 					test.ok(info.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_FLAGS][0].value[pgp.consts.KEYFLAG.SIGN]);
 					test.equals(info.issuer, "3B4385AD77124641");
 					test.equals(info.hashedSubPackets[pgp.consts.SIGSUBPKT.KEY_EXPIRE][0].value, 717704);
-					
-					pgp.signing.verifyIdentitySignature(key, id, sig, null, function(err, valid) {
-						test.ifError(err);
-						test.ok(valid);
-						
-						var forgedId = new Buffer(id.length);
-						id.copy(forgedId);
-						forgedId.writeUInt8(90, 0);
-						pgp.signing.verifyIdentitySignature(key, forgedId, sig, null, function(err, valid) {
-							test.ifError(err);
-							test.ok(!valid);
 
-							test.done();
-						});
-					});
+					test.done();
 				});
 			});
 		});

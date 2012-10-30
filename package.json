@@ -11,5 +11,6 @@
   "license": "MIT",
   "description": "A node.js implementation of OpenPGP.",
   "dependencies": {
+	  "async": "x.x.x"
   }
 }
