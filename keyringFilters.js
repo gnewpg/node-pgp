@@ -1,7 +1,5 @@
 var util = require("util");
 
-module.exports = Filter;
-
 
 var Filter = function() { };
 
@@ -97,11 +95,11 @@ function _valueFilter(check) {
 		this.__value = _normaliseFilterValue(value);
 	};
 
+	util.inherits(ret, Filter);
+
 	ret.prototype.check = function(checkValue) {
 		return check(this.__value, _normaliseFilterValue(checkValue));
 	};
-
-	util.inherits(ret, Filter);
 
 	return ret;
 }
@@ -119,3 +117,6 @@ function _inheritFilter(getFilter) {
 
 	return ret;
 }
+
+
+module.exports = Filter;

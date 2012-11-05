@@ -39,6 +39,9 @@ module.exports = function(stream) {
 		stream.on("end", function() {
 			endData();
 		});
+		stream.on("error", function(err) {
+			endData(err);
+		});
 	}
 
 	function checkRead() {

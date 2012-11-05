@@ -39,7 +39,7 @@ Fifo.prototype = {
 	 * Adds all the values from the items array. items is an array of arrays, and each array in it is an array of arguments to pass to the next()
 	 * callback function.
 	*/
-	_addAllMulti : function(items) {
+	_addAllMultiple : function(items) {
 		this.__items = this.__items.concat(items);
 		this.__check();
 	},
@@ -90,6 +90,36 @@ Fifo.prototype = {
 				}
 			});
 		}
+	},
+
+	toArraySingle : function(callback) {
+		var ret = [ ];
+		this.forEachSeries(function() {
+			var args = utils.toProperArray(arguments);
+			var next = args.pop();
+			ret.push(args[0]);
+			next();
+		}, function(err) {
+			if(err)
+				callback(err);
+			else
+				callback(null, ret);
+		});
+	},
+
+	toArrayMultiple : function(callback) {
+		var ret = [ ];
+		this.forEachSeries(function() {
+			var args = utils.toProperArray(arguments);
+			var next = args.pop();
+			ret.push(args);
+			next();
+		}, function(err) {
+			if(err)
+				callback(err);
+			else
+				callback(null, ret);
+		});
 	}
 };
 
@@ -106,6 +136,10 @@ utils.extend(ArraySingle.prototype, {
 			callback(true);
 		else
 			callback(null, this.__array[this.__i++]);
+	},
+
+	toArraySingle : function(callback) {
+		callback(null, [ ].concat(this.__array));
 	}
 });
 
@@ -123,6 +157,12 @@ utils.extend(ArrayMultiple.prototype, {
 			else
 				callback.apply(null, [ null ].concat(items));
 		});
+	},
+
+	toArraySingle : Fifo.prototype.toArraySingle,
+	
+	toArrayMultiple : function(callback) {
+		callback(null, this.__array);
 	}
 });
 
@@ -171,7 +211,7 @@ utils.extend(Grep.prototype, {
 				if(err)
 					callback(err);
 				else if(doAdd)
-					callback(null, [ null ].concat(args));
+					callback.apply(null, [ null ].concat(args));
 				else
 					this.next(callback);
 			}) ]));

@@ -19,10 +19,9 @@ function getHeaderInfo(data, callback)
 
 	data.read(1, function(err, data1) {
 		if(err)
-		{
-			err.NOFIRSTBYTE = true;
 			callback(err);
-		}
+		else if(data1.length == 0)
+			callback(true);
 		else
 		{
 			var header = data1;
@@ -77,7 +76,7 @@ function getHeaderInfo(data, callback)
 				}
 			}
 		}
-	});
+	}, false);
 }
 
 function generateHeader(tag, packetLength, newFormat)
@@ -151,13 +150,10 @@ function splitPackets(data) {
 
 	function readPacket() {
 		getHeaderInfo(data, function(err, tag, packetLength, header, newFormat) {
-			if(err)
-			{
-				if(!err.NOFIRSTBYTE) // If NOFIRSTBYTE is true, we have reached the end of the stream
-					ret._end(err);
-				else
-					ret._end();
-			}
+			if(err === true)
+				ret._end();
+			else if(err)
+				ret._end(err);
 			else
 			{
 				if(packetLength < 0) // Partial body length

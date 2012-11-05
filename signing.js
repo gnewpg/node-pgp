@@ -10,7 +10,7 @@ var async = require("async");
 function verifySignature(keyring, callback) {
 	utils.getTempFilename(function(err, fname) {
 		if(err) { callback(err); return; }
-		
+
 		fs.open(fname, "w", 0600, function(err, fd) {
 			if(err) { callback(err); return; }
 			
@@ -26,11 +26,11 @@ function verifySignature(keyring, callback) {
 						
 						stdout = stdout.toString("utf8");
 						var success = !!(stdout.match(/^(sig|rev):!:/m) && !stdout.match(/^(sig|rev):[^!]/m));
-						
+
 						fs.unlink(fname, function(err) {
 							if(err)
 								console.log("Error removing temporary file "+fname+".", err);
-						
+
 							callback(null, success);
 						});
 					});
@@ -84,11 +84,14 @@ function verifyXYSignature(keyring, keyId, signatureInfo, callback, getSubObject
 					return next(err);
 
 				buffers.push(packets.generatePacket(subObjectType, subInfo.binary));
+				next();
 			});
 		}
 	], function(err) {
 		if(err)
 			return callback(err);
+
+		buffers.push(packets.generatePacket(consts.PKT.SIGNATURE, signatureInfo.binary));
 
 		verifySignature(Buffer.concat(buffers), function(err, verified) {
 			if(verified)

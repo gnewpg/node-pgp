@@ -1,6 +1,9 @@
 var utils = require("./utils");
 var signing = require("./signing");
 var consts = require("./consts");
+var packets = require("./packets");
+var packetContent = require("./packetContent");
+var Fifo = require("./fifo");
 var Filter = require("./keyringFilters");
 var async = require("async");
 
@@ -170,10 +173,7 @@ Keyring.prototype = {
 					if(err)
 						callback(err);
 					else
-					{
 						this._addKeySignature(keyId, signatureInfo, callback);
-						callback();
-					}
 				}), false);
 			}
 		}));
@@ -236,10 +236,7 @@ Keyring.prototype = {
 					if(err)
 						callback(err);
 					else
-					{
 						this._addSubkeySignature(keyId, subkeyId, signatureInfo, callback);
-						callback();
-					}
 				}));
 			}
 		}));
@@ -302,10 +299,7 @@ Keyring.prototype = {
 					if(err)
 						callback(err);
 					else
-					{
 						this._addIdentitySignature(keyId, identityId, signatureInfo, callback);
-						callback();
-					}
 				}));
 			}
 		}));
@@ -368,10 +362,7 @@ Keyring.prototype = {
 					if(err)
 						callback(err);
 					else
-					{
 						this._addAttributeSignature(keyId, attributeId, signatureInfo, callback);
-						callback();
-					}
 				}));
 			}
 		}));
@@ -434,7 +425,7 @@ Keyring.prototype = {
 		var lastAttributeImported = null;
 
 		packets.splitPackets(keyData).forEachSeries(function(tag, header, body, next) {
-			getPacketInfo(tag, body, function(err, info) {
+			packetContent.getPacketInfo(tag, body, function(err, info) {
 				if(err)
 					return callback(err);
 
@@ -627,16 +618,14 @@ function _filter(list, filter) {
 	});
 }
 
-function _strip(list, fieldList) {
+function _strip(item, fieldList) {
 	if(fieldList == null)
-		return list;
+		return item;
 
-	return Fifo.map(list, function(item, callback) {
-		var newItem = { };
-		for(var i in fieldList)
-			newItem[i] = item[i];
-		callback(null, newItem);
-	});
+	var newItem = { };
+	for(var i=0; i<fieldList.length; i++)
+		newItem[fieldList[i]] = item[fieldList[i]];
+	return newItem;
 }
 
 function _add(existsFunc, addFunc, removeFunc, funcs, callback) {
@@ -765,7 +754,7 @@ function _subkeySignatureVerified(keyring, keyId, subkeyId, signatureInfo, callb
 
 	// Check 3a, 3b
 	if(signatureInfo.sigtype == consts.SIG.SUBKEY_REVOK)
-		checks.push(async.apply(_checkSubkeyRevocationStatus, keyring, keyId, subkeyId));
+		checks.push(async.apply(_checkSubkeyRevocationStatus, keyring, keyId, subkeyId, false));
 
 	// Check 5b
 	if(signatureInfo.sigtype == consts.SIG.SUBKEY && signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_EXPIRE])
@@ -800,6 +789,7 @@ function _verifySignaturesByKey(keyring, keyId, callback) {
 			keyring.getKeySignatureListByIssuer(keyId, { verified: false }).forEachSeries(function(sig, next2) {
 				async.waterfall([
 					function(next3) {
+						console.log(sig);
 						keyring.getKeySignature(sig.keyId, sig.signatureId, next3, [ "issuer", "security" ]);
 					},
 					function(signatureInfo, next3) {
@@ -895,7 +885,7 @@ function _verifySignaturesByKey(keyring, keyId, callback) {
 	], callback);
 }
 
-function _checkKeyRevocationStatus(keyring, keyId, callback, remove) {
+function _checkKeyRevocationStatus(keyring, keyId, remove, callback) {
 	keyring.getKeySignatures(keyId, { sigtype: consts.SIG.KEY_REVOK, verified: true }).forEachSeries(function(signatureInfo, next) {
 		async.waterfall([
 			function(next) {
@@ -920,7 +910,7 @@ function _checkKeyRevocationStatus(keyring, keyId, callback, remove) {
 	}, callback);
 }
 
-function _checkSubkeyRevocationStatus(keyring, keyId, subkeyId, callback) {
+function _checkSubkeyRevocationStatus(keyring, keyId, subkeyId, remove, callback) {
 	keyring.getSubkeySignatures(keyId, subkeyId, { sigtype: consts.SIG.SUBKEY_REVOK, verified: true }).forEachSeries(function(signatureInfo, next) {
 		async.waterfall([
 			function(next) {
@@ -998,7 +988,7 @@ function _isAuthorisedRevoker(keyring, keyId, issuerId, callback) {
 }
 
 // Check 4: Find verified revocation signatures on the specified key and its sub-objects and revoke all earlier signatures by the same issuer on the same object
-function _checkSignatureRevocationStatus(keyring, keyId, callback, remove) {
+function _checkSignatureRevocationStatus(keyring, keyId, remove, callback) {
 	async.series([
 		function(next) {
 			if(remove)
@@ -1054,7 +1044,7 @@ function _resetSignatureRevocationStatus(keyring, keyId, callback) {
 			}, next);
 		},
 		function(next) {
-			keyring.getIdentityList(keyId, function(identityId, next) {
+			keyring.getIdentityList(keyId).forEachSeries(function(identityId, next) {
 				keyring.getIdentitySignatures(keyId, identityId, { sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] }, [ "id", "revoked" ]).forEachSeries(function(signatureInfo, next) {
 					if(signatureInfo.revoked)
 						keyring._updateIdentitySignature(keyId, identityId, signatureInfo.id, { revoked: null }, next);
@@ -1064,7 +1054,7 @@ function _resetSignatureRevocationStatus(keyring, keyId, callback) {
 			}, next);
 		},
 		function(next) {
-			keyring.getAttributeList(keyId, function(attributeId, next) {
+			keyring.getAttributeList(keyId).forEachSeries(function(attributeId, next) {
 				keyring.getAttributeSignatures(keyId, attributeId, { sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] }, [ "id", "revoked" ]).forEachSeries(function(signatureInfo, next) {
 					if(signatureInfo.revoked)
 						keyring._updateAttributeSignature(keyId, attributeId, signatureInfo.id, { revoked: null }, next);
@@ -1114,6 +1104,8 @@ function _checkSelfSignatures(keyring, keyId, callback) {
 			}
 			checkExpire(signatureInfo, next);
 		}
+
+		var filter = { verified: true, issuer: keyId, sigtype: [ consts.SIG.KEY, consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] };
 
 		async.series([
 			function(next) {

@@ -5,6 +5,7 @@ var fs = require("fs");
 var BufferedStream = require("./bufferedStream");
 var consts = require("./consts");
 var utils = require("./utils");
+var async = require("async");
 
 function getStreamKeyring(stream, callback) {
 	var ret = new _KeyringStream(stream);
@@ -16,9 +17,22 @@ function getStreamKeyring(stream, callback) {
 	});
 }
 
-function getFileKeyring(fname, callback) {
+function getFileKeyring(fname, callback, create) {
 	var ret = new _KeyringFile(fname);
-	ret.revertChanges(function(err) {
+	async.waterfall([
+		function(next) {
+			if(create)
+				fs.exists(fname, function(exists) { next(null, exists); });
+			else
+				next(null, true);
+		},
+		function(doRead, next) {
+			if(doRead)
+				ret.revertChanges(next);
+			else
+				next();
+		}
+	], function(err) {
 		if(err)
 			callback(err);
 		else
@@ -36,7 +50,7 @@ util.inherits(_KeyringStream, Keyring);
 
 utils.extend(_KeyringStream.prototype, {
 	getKeyList : function(filter) {
-		return Keyring._filter(_getList(this._keys), filter);
+		return _getList(filter, this._keys);
 	},
 
 	keyExists : function(id, callback) {
@@ -60,7 +74,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getSubkeyList : function(keyId, filter) {
-		return Keyring._filter(_getList(this._subkeys, keyId), filter);
+		return _getList(filter, this._subkeys, keyId);
 	},
 
 	subkeyExists : function(keyId, id, callback) {
@@ -68,11 +82,11 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getSubkey : function(keyId, id, callback, fields) {
-		_get(callback, fields, this._subkeys, keyId);
+		_get(callback, fields, this._subkeys, keyId, id);
 	},
 
 	_addSubkey : function(keyId, subkeyInfo, callback) {
-		_add(callback, subkeyInfo, this._subkeys);
+		_add(callback, subkeyInfo, this._subkeys, keyId);
 	},
 
 	_updateSubkey : function(keyId, id, fields, callback) {
@@ -96,7 +110,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getIdentityList : function(keyId, filter) {
-		return Keyring._filter(_getList(this._identities, keyId), filter);
+		return _getList(filter, this._identities, keyId);
 	},
 
 	identityExists : function(keyId, id, callback) {
@@ -104,7 +118,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getIdentity : function(keyId, id, callback, fields) {
-		_get(callback, fields, this._identities, keyId);
+		_get(callback, fields, this._identities, keyId, id);
 	},
 
 	_addIdentity : function(keyId, identityInfo, callback) {
@@ -120,7 +134,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getAttributeList : function(keyId, filter) {
-		return Keyring._filter(_getList(this._attributes, keyId), filter);
+		return _getList(filter, this._attributes, keyId);
 	},
 
 	attributeExists : function(keyId, id, callback) {
@@ -128,7 +142,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getAttribute : function(keyId, id, callback, fields) {
-		_get(callback, fields, this._attributes, keyId);
+		_get(callback, fields, this._attributes, keyId, id);
 	},
 
 	_addAttribute : function(keyId, attributeInfo, callback) {
@@ -144,11 +158,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getKeySignatureList : function(keyId, filter) {
-		return Keyring._filter(_getList(this._keySignatures, keyId), filter);
-	},
-
-	getKeySignatureListByIssuer : function(issuerId, filter) {
-		return Keyring._filter(_getList(this._keySignatures));
+		return _getList(filter, this._keySignatures, keyId);
 	},
 
 	keySignatureExists : function(keyId, id, callback) {
@@ -156,7 +166,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getKeySignature : function(keyId, id, callback, fields) {
-		_get(callback, fields, this._keySignatures, keyId);
+		_get(callback, fields, this._keySignatures, keyId, id);
 	},
 
 	_addKeySignature : function(keyId, signatureInfo, callback) {
@@ -172,7 +182,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getSubkeySignatureList : function(keyId, subkeyId, filter) {
-		return Keyring._filter(_getList(this._subkeySignatures, keyId));
+		return _getList(filter, this._subkeySignatures, keyId, subkeyId);
 	},
 
 	subkeySignatureExists : function(keyId, subkeyId, id, callback) {
@@ -180,7 +190,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getSubkeySignature : function(keyId, subkeyId, id, callback, fields) {
-		_get(callback, fields, this._subkeySignatures, keyId, subkeyId);
+		_get(callback, fields, this._subkeySignatures, keyId, subkeyId, id);
 	},
 
 	_addSubkeySignature : function(keyId, subkeyId, signatureInfo, callback) {
@@ -196,7 +206,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getIdentitySignatureList : function(keyId, identityId, filter) {
-		return Keyring._filter(_getList(this._identitySignatures, keyId), filter);
+		return _getList(filter, this._identitySignatures, keyId, identityId);
 	},
 
 	identitySignatureExists : function(keyId, identityId, id, callback) {
@@ -204,7 +214,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getIdentitySignature : function(keyId, identityId, id, callback, fields) {
-		_get(callback, fields, this._identitySignatures, keyId, identityId);
+		_get(callback, fields, this._identitySignatures, keyId, identityId, id);
 	},
 
 	_addIdentitySignature : function(keyId, identityId, signatureInfo, callback) {
@@ -220,11 +230,11 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getAttributeSignatureList : function(keyId, attributeId, filter) {
-		return Keyring._filter(_getList(this._attributeSignatures, keyId), filter);
+		return _getList(filter, this._attributeSignatures, keyId, attributeId);
 	},
 
 	attributeSignatureExists : function(keyId, attributeId, id, callback) {
-		_get(callback, this._attributeSignatures, keyId, attributeId);
+		_get(callback, this._attributeSignatures, keyId, attributeId, id);
 	},
 
 	getAttributeSignature : function(keyId, attributeId, id, callback, fields) {
@@ -282,7 +292,7 @@ utils.extend(_KeyringFile.prototype, {
 
 	revertChanges : function(callback) {
 		this._clear();
-		this._importKeys(fs.createReadStream(this._filename), callback);
+		this.importKeys(fs.createReadStream(this._filename), callback);
 	}
 });
 
@@ -300,10 +310,17 @@ function _getItem(obj, args, make) {
 	return obj;
 }
 
-function _getList(obj, idx) {
+function _getList(filter, obj, idx) {
 	obj = _getItem(obj, utils.toProperArray(arguments).slice(2));
 
-	return Fifo.fromArraySingle(Object.keys(obj));
+	var fifo = new Fifo();
+	for(var i in obj)
+		fifo._add(obj[i]);
+	fifo._end();
+
+	return Fifo.map(Keyring._filter(fifo, filter), function(item, callback) {
+		callback(null, item.id);
+	});
 }
 
 function _exists(callback, obj, idx) {

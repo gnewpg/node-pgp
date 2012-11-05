@@ -8,7 +8,7 @@ function getTempFilename(callback)
 	var cb = function(err) {
 		if(err) { callback(err); return; }
 		
-		var fname = config.tmpDir+"/"+(new Date()).getTime();
+		var fname = config.tmpDir+"/"+Math.floor(Math.random()*(new Date()).getTime());
 		fs.exists(fname, function(exists) {
 			if(exists)
 				cb();
@@ -77,7 +77,18 @@ function extend(obj1, obj2) {
 		}
 	}
 	return obj1;
-};
+}
+
+function callback(func) {
+	var run = false;
+	return function() {
+		if(run)
+			throw new Error("Run twice");
+
+		run = true;
+		func.apply(this, arguments);
+	};
+}
 
 exports.getTempFilename = getTempFilename;
 exports.hash = hash;
@@ -85,3 +96,4 @@ exports.toProperArray = toProperArray;
 exports.indexOf = indexOf;
 exports.proxy = proxy;
 exports.extend = extend;
+exports.callback = callback;
