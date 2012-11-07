@@ -886,7 +886,7 @@ function _verifySignaturesByKey(keyring, keyId, callback) {
 }
 
 function _checkKeyRevocationStatus(keyring, keyId, remove, callback) {
-	keyring.getKeySignatures(keyId, { sigtype: consts.SIG.KEY_REVOK, verified: true }).forEachSeries(function(signatureInfo, next) {
+	keyring.getKeySignatures(keyId, { sigtype: consts.SIG.KEY_REVOK, verified: true }, [ "id", "issuer" ]).forEachSeries(function(signatureInfo, next) {
 		async.waterfall([
 			function(next) {
 				if(signatureInfo.issuer == keyId)
@@ -899,19 +899,18 @@ function _checkKeyRevocationStatus(keyring, keyId, remove, callback) {
 					keyring._updateKey(keyId, { revoked: signatureInfo.id }, callback);
 				else
 					next();
-			},
-			function(next) {
-				if(remove)
-					keyring._updateKey(keyId, { revoked: null }, next);
-				else
-					next();
 			}
 		], next);
-	}, callback);
+	}, function(err) {
+		if(err || !remove)
+			return callback(err);
+
+		keyring._updateKey(keyId, { revoked: null }, callback);
+	});
 }
 
 function _checkSubkeyRevocationStatus(keyring, keyId, subkeyId, remove, callback) {
-	keyring.getSubkeySignatures(keyId, subkeyId, { sigtype: consts.SIG.SUBKEY_REVOK, verified: true }).forEachSeries(function(signatureInfo, next) {
+	keyring.getSubkeySignatures(keyId, subkeyId, { sigtype: consts.SIG.SUBKEY_REVOK, verified: true }, [ "id", "issuer" ]).forEachSeries(function(signatureInfo, next) {
 		async.waterfall([
 			function(next) {
 				if(signatureInfo.issuer == keyId)
@@ -924,15 +923,14 @@ function _checkSubkeyRevocationStatus(keyring, keyId, subkeyId, remove, callback
 					keyring._updateSubkey(keyId, subkeyId, { revoked: signatureInfo.id }, callback);
 				else
 					next();
-			},
-			function(next) {
-				if(remove)
-					keyring._updateSubkey(keyId, subkeyId, { revoked: null }, next);
-				else
-					next();
 			}
 		], next);
-	}, callback);
+	}, function(err) {
+		if(err || !remove)
+			return callback(err);
+
+		keyring._updateSubkey(keyId, subkeyId, { revoked: null }, next);
+	});
 }
 
 function _isAuthorisedRevoker(keyring, keyId, issuerId, callback) {
