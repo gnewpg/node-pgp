@@ -92,13 +92,14 @@ function _normaliseFilterValue(value) {
 
 function _valueFilter(check) {
 	var ret = function(value) {
+		this.__rawValue = value;
 		this.__value = _normaliseFilterValue(value);
 	};
 
 	util.inherits(ret, Filter);
 
 	ret.prototype.check = function(checkValue) {
-		return check(this.__value, _normaliseFilterValue(checkValue));
+		return check(_normaliseFilterValue(checkValue), this.__value);
 	};
 
 	return ret;
@@ -117,6 +118,5 @@ function _inheritFilter(getFilter) {
 
 	return ret;
 }
-
 
 module.exports = Filter;
