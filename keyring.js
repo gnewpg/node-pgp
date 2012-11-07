@@ -99,7 +99,13 @@ Keyring.prototype = {
 	getIdentity : function(keyId, id, callback, fields) { _e(callback); },
 
 	addIdentity : function(keyId, identityInfo, callback) {
-		this._addIdentity(keyId, identityInfo, callback);
+		_add(
+			async.apply(p(this, this.identityExists), keyId, identityInfo.id),
+			async.apply(p(this, this._addIdentity), keyId, identityInfo),
+			async.apply(p(this, this.removeIdentity), keyId, identityInfo.id),
+			[ ],
+			callback
+		);
 	},
 
 	_addIdentity : function(keyId, identityInfo, callback) { _e(callback); },
@@ -123,7 +129,13 @@ Keyring.prototype = {
 	getAttribute : function(keyId, id, callback, fields) { _e(callback); },
 
 	addAttribute : function(keyId, attributeInfo, callback) {
-		this._addAttribute(keyId, attributeInfo, callback);
+		_add(
+			async.apply(p(this, this.attributeExists), keyId, attributeInfo.id),
+			async.apply(p(this, this._addAttribute), keyId, attributeInfo),
+			async.apply(p(this, this.removeAttribute), keyId, attributeInfo.id),
+			[ ],
+			callback
+		);
 	},
 
 	_addAttribute : function(keyId, attributeInfo, callback) { _e(callback); },
@@ -160,23 +172,23 @@ Keyring.prototype = {
 	getKeySignature : function(keyId, id, callback, fields) { _e(callback); },
 
 	addKeySignature : function(keyId, signatureInfo, callback) {
-		signing.verifyKeySignature(this, keyId, signatureInfo, p(this, function(err, verified) {
-			if(err)
-				callback(err);
-			else if(verified === null)
-				this._addKeySignature(keyId, signatureInfo, callback);
-			else if(!verified)
-				callback(new Error("Invalid signature."));
-			else
-			{
-				_keySignatureVerified(this, keyId, signatureInfo, p(this, function(err) {
-					if(err)
-						callback(err);
+		_add(
+			async.apply(p(this, this.keySignatureExists), keyId, signatureInfo.id),
+			async.apply(p(this, this._addKeySignature), keyId, signatureInfo),
+			async.apply(p(this, this.removeKeySignature), keyId, signatureInfo.id),
+			[
+				async.apply(signing.verifyKeySignature, this, keyId, signatureInfo),
+				p(this, function(verified, next) {
+					if(verified == null)
+						next();
+					else if(!verified)
+						next(new Error("Invalid signature."));
 					else
-						this._addKeySignature(keyId, signatureInfo, callback);
-				}), false);
-			}
-		}));
+						_keySignatureVerified(this, keyId, signatureInfo, next);
+				})
+			],
+			callback
+		);
 	},
 
 	_addKeySignature : function(keyId, signatureInfo, callback) { _e(callback); },
@@ -184,7 +196,7 @@ Keyring.prototype = {
 	_updateKeySignature : function(keyId, signatureId, fields, callback) { _e(callback); },
 
 	removeKeySignature : function(keyId, id, callback) {
-		this.getKeySignature(keyId, id, function(err, signatureInfo) {
+		this.getKeySignature(keyId, id, p(this, function(err, signatureInfo) {
 			if(err)
 				return callback(err);
 
@@ -192,7 +204,7 @@ Keyring.prototype = {
 				async.apply(p(this, this._removeKeySignature), keyId, id),
 				async.apply(_keySignatureRemoved, keyId, signatureInfo)
 			], callback);
-		});
+		}));
 	},
 
 	_removeKeySignature : function(keyId, id, callback) { _e(callback); },
@@ -223,23 +235,23 @@ Keyring.prototype = {
 	getSubkeySignature : function(keyId, subkeyId, id, callback, fields) { _e(callback); },
 
 	addSubkeySignature : function(keyId, subkeyId, signatureInfo, callback) {
-		signing.verifySubkeySignature(this, keyId, subkeyId, signatureInfo, p(this, function(err, verified) {
-			if(err)
-				callback(err);
-			else if(verified === null)
-				this._addSubkeySignature(keyId, subkeyId, signatureInfo, callback);
-			else if(!verified)
-				callback(new Error("Invalid signature."));
-			else
-			{
-				_subkeySignatureVerified(this, keyId, subkeyId, signatureInfo, p(this, function(err) {
-					if(err)
-						callback(err);
+		_add(
+			async.apply(p(this, this.subkeySignatureExists), keyId, subkeyId, signatureInfo.id),
+			async.apply(p(this, this._addSubkeySignature), keyId, subkeyId, signatureInfo),
+			async.apply(p(this, this.removeSubkeySignature), keyId, subkeyId, signatureInfo.id),
+			[
+				async.apply(signing.verifySubkeySignature, this, keyId, subkeyId, signatureInfo),
+				p(this, function(verified, next) {
+					if(verified == null)
+						next();
+					else if(!verified)
+						next(new Error("Invalid signature."));
 					else
-						this._addSubkeySignature(keyId, subkeyId, signatureInfo, callback);
-				}));
-			}
-		}));
+						_subkeySignatureVerified(this, keyId, subkeyId, signatureInfo, next);
+				})
+			],
+			callback
+		);
 	},
 
 	_addSubkeySignature : function(keyId, subkeyId, signatureInfo, callback) { _e(callback); },
@@ -247,7 +259,7 @@ Keyring.prototype = {
 	_updateSubkeySignature : function(keyId, subkeyId, signatureId, fields, callback) { _e(callback); },
 
 	removeSubkeySignature : function(keyId, subkeyId, id, callback) {
-		this.getSubkeySignature(keyId, subkeyId, id, function(err, signatureInfo) {
+		this.getSubkeySignature(keyId, subkeyId, id, p(this, function(err, signatureInfo) {
 			if(err)
 				return callback(err);
 
@@ -255,7 +267,7 @@ Keyring.prototype = {
 				async.apply(p(this, this._removeSubkeySignature), keyId, subkeyId, id),
 				async.apply(_subkeySignatureRemoved, keyId, subkeyId, signatureInfo)
 			], callback);
-		});
+		}));
 	},
 
 	_removeSubkeySignature : function(keyId, subkeyId, id, callback) { _e(callback); },
@@ -286,23 +298,23 @@ Keyring.prototype = {
 	getIdentitySignature : function(keyId, identityId, id, callback, fields) { _e(callback); },
 
 	addIdentitySignature : function(keyId, identityId, signatureInfo, callback) {
-		signing.verifyIdentitySignature(this, keyId, identityId, signatureInfo, p(this, function(err, verified) {
-			if(err)
-				callback(err);
-			else if(verified === null)
-				this._addIdentitySignature(keyId, identityId, signatureInfo, callback);
-			else if(!verified)
-				callback(new Error("Invalid signature."));
-			else
-			{
-				_identitySignatureVerified(this, keyId, identityId, signatureInfo, p(this, function(err) {
-					if(err)
-						callback(err);
+		_add(
+			async.apply(p(this, this.identitySignatureExists), keyId, identityId, signatureInfo.id),
+			async.apply(p(this, this._addIdentitySignature), keyId, identityId, signatureInfo),
+			async.apply(p(this, this.removeIdentitySignature), keyId, identityId, signatureInfo.id),
+			[
+				async.apply(signing.verifyIdentitySignature, this, keyId, identityId, signatureInfo),
+				p(this, function(verified, next) {
+					if(verified == null)
+						next();
+					else if(!verified)
+						next(new Error("Invalid signature."));
 					else
-						this._addIdentitySignature(keyId, identityId, signatureInfo, callback);
-				}));
-			}
-		}));
+						_identitySignatureVerified(this, keyId, identityId, signatureInfo, next);
+				})
+			],
+			callback
+		);
 	},
 
 	_addIdentitySignature : function(keyId, identityId, signatureInfo, callback) { _e(callback); },
@@ -310,7 +322,7 @@ Keyring.prototype = {
 	_updateIdentitySignature : function(keyId, identityId, signatureId, fields, callback) { _e(callback); },
 
 	removeIdentitySignature : function(keyId, identityId, id, callback) {
-		this.getIdentitySignature(keyId, identityId, id, function(err, signatureInfo) {
+		this.getIdentitySignature(keyId, identityId, id, p(this, function(err, signatureInfo) {
 			if(err)
 				return callback(err);
 
@@ -318,7 +330,7 @@ Keyring.prototype = {
 				async.apply(p(this, this._removeIdentitySignature), keyId, identityId, id),
 				async.apply(_identitySignatureRemoved, keyId, identityId, signatureInfo)
 			], callback);
-		});
+		}));
 	},
 
 	_removeIdentitySignature : function(keyId, identityId, id, callback) { _e(callback); },
@@ -335,7 +347,7 @@ Keyring.prototype = {
 		var ret = new Fifo();
 		this.getKeyList().forEachSeries(p(this, function(keyId, next) {
 			this.getAttributeList(keyId).forEachSeries(p(this, function(attributeId, next2) {
-				this.getAttributeSignatureList(keyId, attributeId, filter).forEachSeries(function(attributeId, next3) {
+				this.getAttributeSignatureList(keyId, attributeId, filter).forEachSeries(function(signatureId, next3) {
 					ret._add({ keyId : keyId, attributeId : attributeId, signatureId : signatureId });
 					next3();
 				}, next2);
@@ -349,23 +361,23 @@ Keyring.prototype = {
 	getAttributeSignature : function(keyId, attributeId, id, callback, fields) { _e(callback); },
 
 	addAttributeSignature : function(keyId, attributeId, signatureInfo, callback) {
-		signing.verifyAttributeSignature(this, keyId, attributeId, signatureInfo, p(this, function(err, verified) {
-			if(err)
-				callback(err);
-			else if(verified === null)
-				this._addAttributeSignature(keyId, attributeId, signatureInfo, callback);
-			else if(!verified)
-				callback(new Error("Invalid signature."));
-			else
-			{
-				_attributeSignatureVerified(this, keyId, attributeId, signatureInfo, p(this, function(err) {
-					if(err)
-						callback(err);
+		_add(
+			async.apply(p(this, this.attributeSignatureExists), keyId, attributeId, signatureInfo.id),
+			async.apply(p(this, this._addAttributeSignature), keyId, attributeId, signatureInfo),
+			async.apply(p(this, this.removeAttributeSignature), keyId, attributeId, signatureInfo.id),
+			[
+				async.apply(signing.verifyAttributeSignature, this, keyId, attributeId, signatureInfo),
+				p(this, function(verified, next) {
+					if(verified == null)
+						next();
+					else if(!verified)
+						next(new Error("Invalid signature."));
 					else
-						this._addAttributeSignature(keyId, attributeId, signatureInfo, callback);
-				}));
-			}
-		}));
+						_attributeSignatureVerified(this, keyId, attributeId, signatureInfo, next);
+				})
+			],
+			callback
+		);
 	},
 
 	_addAttributeSignature : function(keyId, attributeId, signatureInfo, callback) { _e(callback); },
@@ -373,15 +385,15 @@ Keyring.prototype = {
 	_updateAttributeSignature : function(keyId, attributeId, signatureId, fields, callback) { _e(callback); },
 
 	removeAttributeSignature : function(keyId, attributeId, id, callback) {
-		this.getAttributeSignature(keyId, attributeId, id, function(err, signatureInfo) {
+		this.getAttributeSignature(keyId, attributeId, id, p(this, function(err, signatureInfo) {
 			if(err)
 				return callback(err);
 
 			async.series([
-				async.apply(p(this, this._removeIdentitySignature), keyId, attributeId, id),
+				async.apply(p(this, this._removeAttributeSignature), keyId, attributeId, id),
 				async.apply(_attributeSignatureRemoved, keyId, attributeId, signatureInfo)
 			], callback);
-		});
+		}));
 	},
 
 	_removeAttributeSignature : function(keyId, attributeId, id, callback) { _e(callback); },
@@ -640,11 +652,7 @@ function _add(existsFunc, addFunc, removeFunc, funcs, callback) {
 				if(err)
 					finish(err);
 				else
-				{
-					async.forEachSeries(funcs, function(func, next) {
-						func(next);
-					}, finish);
-				}
+					async.waterfall(funcs, finish);
 			});
 		}
 	});
@@ -652,7 +660,10 @@ function _add(existsFunc, addFunc, removeFunc, funcs, callback) {
 	function finish(err) {
 		if(err)
 		{
-			removeFunc();
+			removeFunc(function(err) {
+				if(err)
+					console.warn("Error while removing errorneous object: ", err);
+			});
 			callback(err);
 		}
 		else

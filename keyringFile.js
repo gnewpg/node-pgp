@@ -78,7 +78,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	subkeyExists : function(keyId, id, callback) {
-		_exists(callback, this._subkeys, keyId);
+		_exists(callback, this._subkeys, keyId, id);
 	},
 
 	getSubkey : function(keyId, id, callback, fields) {
@@ -114,7 +114,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	identityExists : function(keyId, id, callback) {
-		_exists(callback, this._identities, keyId);
+		_exists(callback, this._identities, keyId, id);
 	},
 
 	getIdentity : function(keyId, id, callback, fields) {
@@ -138,7 +138,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	attributeExists : function(keyId, id, callback) {
-		_exists(callback, this._attributes, keyId);
+		_exists(callback, this._attributes, keyId, id);
 	},
 
 	getAttribute : function(keyId, id, callback, fields) {
@@ -162,7 +162,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	keySignatureExists : function(keyId, id, callback) {
-		_exists(callback, this._keySignatures, keyId);
+		_exists(callback, this._keySignatures, keyId, id);
 	},
 
 	getKeySignature : function(keyId, id, callback, fields) {
@@ -186,7 +186,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	subkeySignatureExists : function(keyId, subkeyId, id, callback) {
-		_exists(callback, this._subkeySignatures, keyId, subkeyId);
+		_exists(callback, this._subkeySignatures, keyId, subkeyId, id);
 	},
 
 	getSubkeySignature : function(keyId, subkeyId, id, callback, fields) {
@@ -210,7 +210,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	identitySignatureExists : function(keyId, identityId, id, callback) {
-		_get(callback, this._identitySignatures, keyId, identityId);
+		_exists(callback, this._identitySignatures, keyId, identityId, id);
 	},
 
 	getIdentitySignature : function(keyId, identityId, id, callback, fields) {
@@ -234,7 +234,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	attributeSignatureExists : function(keyId, attributeId, id, callback) {
-		_get(callback, this._attributeSignatures, keyId, attributeId, id);
+		_exists(callback, this._attributeSignatures, keyId, attributeId, id);
 	},
 
 	getAttributeSignature : function(keyId, attributeId, id, callback, fields) {
