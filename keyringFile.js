@@ -238,7 +238,7 @@ utils.extend(_KeyringStream.prototype, {
 	},
 
 	getAttributeSignature : function(keyId, attributeId, id, callback, fields) {
-		_get(callback, fields, this._attributeSignatures, keyId, attributeId);
+		_get(callback, fields, this._attributeSignatures, keyId, attributeId, id);
 	},
 
 	_addAttributeSignature : function(keyId, attributeId, signatureInfo, callback) {

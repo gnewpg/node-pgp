@@ -6,6 +6,7 @@ var packetContent = require("./packetContent");
 var Fifo = require("./fifo");
 var Filter = require("./keyringFilters");
 var async = require("async");
+var formats = require("./formats");
 
 var p = utils.proxy;
 
@@ -202,7 +203,7 @@ Keyring.prototype = {
 
 			async.series([
 				async.apply(p(this, this._removeKeySignature), keyId, id),
-				async.apply(_keySignatureRemoved, keyId, signatureInfo)
+				async.apply(_keySignatureRemoved, this, keyId, signatureInfo)
 			], callback);
 		}));
 	},
@@ -265,7 +266,7 @@ Keyring.prototype = {
 
 			async.series([
 				async.apply(p(this, this._removeSubkeySignature), keyId, subkeyId, id),
-				async.apply(_subkeySignatureRemoved, keyId, subkeyId, signatureInfo)
+				async.apply(_subkeySignatureRemoved, this, keyId, subkeyId, signatureInfo)
 			], callback);
 		}));
 	},
@@ -328,7 +329,7 @@ Keyring.prototype = {
 
 			async.series([
 				async.apply(p(this, this._removeIdentitySignature), keyId, identityId, id),
-				async.apply(_identitySignatureRemoved, keyId, identityId, signatureInfo)
+				async.apply(_identitySignatureRemoved, this, keyId, identityId, signatureInfo)
 			], callback);
 		}));
 	},
@@ -391,7 +392,7 @@ Keyring.prototype = {
 
 			async.series([
 				async.apply(p(this, this._removeAttributeSignature), keyId, attributeId, id),
-				async.apply(_attributeSignatureRemoved, keyId, attributeId, signatureInfo)
+				async.apply(_attributeSignatureRemoved, this, keyId, attributeId, signatureInfo)
 			], callback);
 		}));
 	},
@@ -415,13 +416,13 @@ Keyring.prototype = {
 			{
 				infoObj.err = err;
 				imported.failed.push(err);
-				next();
+				process.nextTick(next);
 				return null;
 			}
 			else
 			{
 				addTo.push(infoObj);
-				next();
+				process.nextTick(next);
 				return infoObj.id;
 			}
 		}
@@ -436,7 +437,7 @@ Keyring.prototype = {
 		var lastIdentityImported = null;
 		var lastAttributeImported = null;
 
-		packets.splitPackets(keyData).forEachSeries(function(tag, header, body, next) {
+		packets.splitPackets(formats.decodeKeyFormat(keyData)).forEachSeries(function(tag, header, body, next) {
 			packetContent.getPacketInfo(tag, body, function(err, info) {
 				if(err)
 					return callback(err);
@@ -453,7 +454,7 @@ Keyring.prototype = {
 					case consts.PKT.PUBLIC_SUBKEY:
 						lastSubkeyId = info.id;
 						lastSubkeyImported = { type: tag, id: info.id, signatures: [ ] };
-						lastIdentityId = lastAttributeId = null;
+						lastSubkeyId = lastIdentityId = lastAttributeId = null;
 
 						if(lastKeyId == null)
 							lastSubkeyId = add(null, lastSubkeyImported, new Error("Subkey without key."), next);
@@ -697,7 +698,9 @@ function _add(existsFunc, addFunc, removeFunc, funcs, callback) {
  *    by a key that is authorised by that key to make revocations for it (as described in check 2)]. [A signature revocation signature may contain the hash
  *    of the signature it revokes in the SIGSUBPKT.SIGTARGET sub-packet, in that case it only revokes that specific signature.] Else it revokes all signatures
  *    issued by the same key on the same object on a date earlier than that of the revocation signature. SIGSUBPKT.REVOCABLE can prevent signatures
- *    from being revoked. This check needs to be done when:
+ *    from being revoked.
+ *    TODO: Implement the hash thing.
+ *    This check needs to be done when:
  *     a) a signature revocation signature is verified. If the issuer is authorised and the signature being revoked are available, the revocation is performed
  *     b) any key or certification signature is _uploaded_. Search all verified signature revocation signatures if they revoke it.
  *     [c) a key or certification signature is verified that contains a revocation key authorisation. All signatures that have been made by this key need
@@ -800,11 +803,10 @@ function _verifySignaturesByKey(keyring, keyId, callback) {
 			keyring.getKeySignatureListByIssuer(keyId, { verified: false }).forEachSeries(function(sig, next2) {
 				async.waterfall([
 					function(next3) {
-						console.log(sig);
-						keyring.getKeySignature(sig.keyId, sig.signatureId, next3, [ "issuer", "security" ]);
+						keyring.getKeySignature(sig.keyId, sig.signatureId, next3, [ "binary", "issuer", "security" ]);
 					},
 					function(signatureInfo, next3) {
-						signing.verifyKeySignature(this, sig.keyId, signatureInfo, async.apply(next3, signatureInfo));
+						signing.verifyKeySignature(keyring, sig.keyId, signatureInfo, function(err, verified){ next3(err, signatureInfo, verified); });
 					},
 					function(signatureInfo, verified, next3) {
 						if(!verified)
@@ -825,17 +827,17 @@ function _verifySignaturesByKey(keyring, keyId, callback) {
 			keyring.getSubkeySignatureListByIssuer(keyId, { verified: false }).forEachSeries(function(sig, next2) {
 				async.waterfall([
 					function(next3) {
-						keyring.getSubkeySignature(sig.keyId, sig.subkeyId, sig.signatureId, next3, [ "issuer", "security" ]);
+						keyring.getSubkeySignature(sig.keyId, sig.subkeyId, sig.signatureId, next3, [ "binary", "issuer", "security" ]);
 					},
 					function(signatureInfo, next3) {
-						signing.verifySubkeySignature(this, sig.keyId, sig.subkeyId, signatureInfo, async.apply(next3, signatureInfo));
+						signing.verifySubkeySignature(keyring, sig.keyId, sig.subkeyId, signatureInfo, function(err, verified){ next3(err, signatureInfo, verified); });
 					},
 					function(signatureInfo, verified, next3) {
 						if(!verified)
 							keyring.removeSubkeySignature(sig.keyId, sig.subkeyId, sig.signatureId, next3);
 						else
 						{
-							keyring._updateSubkeySignature(sig.keyId, sig.subkeyId, { verified: signatureInfo.verified, security: signatureInfo.security }, function(err) {
+							keyring._updateSubkeySignature(sig.keyId, sig.subkeyId, sig.signatureId, { verified: signatureInfo.verified, security: signatureInfo.security }, function(err) {
 								if(err)
 									return next3(err);
 								_subkeySignatureVerified(keyring, sig.keyId, sig.subkeyId, signatureInfo, next3);
@@ -849,17 +851,17 @@ function _verifySignaturesByKey(keyring, keyId, callback) {
 			keyring.getIdentitySignatureListByIssuer(keyId, { verified: false }).forEachSeries(function(sig, next2) {
 				async.waterfall([
 					function(next3) {
-						keyring.getIdentitySignature(sig.keyId, sig.identityId, sig.signatureId, next3, [ "issuer", "security" ]);
+						keyring.getIdentitySignature(sig.keyId, sig.identityId, sig.signatureId, next3, [ "binary", "issuer", "security" ]);
 					},
 					function(signatureInfo, next3) {
-						signing.verifyIdentitySignature(this, keyId, sig.identityId, signatureInfo, async.apply(next3, signatureInfo));
+						signing.verifyIdentitySignature(keyring, sig.keyId, sig.identityId, signatureInfo, function(err, verified){ next3(err, signatureInfo, verified); });
 					},
 					function(signatureInfo, verified, next3) {
 						if(!verified)
 							keyring.removeIdentitySignature(sig.keyId, sig.identityId, sig.signatureId, next3);
 						else
 						{
-							keyring._updateIdentitySignature(sig.keyId, sig.identityId, { verified: signatureInfo.verified, security: signatureInfo.security }, function(err) {
+							keyring._updateIdentitySignature(sig.keyId, sig.identityId, sig.signatureId, { verified: signatureInfo.verified, security: signatureInfo.security }, function(err) {
 								if(err)
 									return next3(err);
 								_identitySignatureVerified(keyring, sig.keyId, sig.identityId, signatureInfo, next3);
@@ -873,17 +875,17 @@ function _verifySignaturesByKey(keyring, keyId, callback) {
 			keyring.getAttributeSignatureListByIssuer(keyId, { verified: false }).forEachSeries(function(sig, next2) {
 				async.waterfall([
 					function(next3) {
-						keyring.getAttributeSignature(sig.keyId, sig.attributeId, sig.signatureId, next3, [ "issuer", "security" ]);
+						keyring.getAttributeSignature(sig.keyId, sig.attributeId, sig.signatureId, next3, [ "binary", "issuer", "security" ]);
 					},
 					function(signatureInfo, next3) {
-						signing.verifyAttributeSignature(this, keyId, sig.attributeId, signatureInfo, async.apply(next3, signatureInfo));
+						signing.verifyAttributeSignature(keyring, sig.keyId, sig.attributeId, signatureInfo, function(err, verified){ next3(err, signatureInfo, verified); });
 					},
 					function(signatureInfo, verified, next3) {
 						if(!verified)
 							keyring.removeAttributeSignature(sig.keyId, sig.attributeId, sig.signatureId, next3);
 						else
 						{
-							keyring._updateAttributeSignature(sig.keyId, sig.attributeId, { verified: signatureInfo.verified, security: signatureInfo.security }, function(err) {
+							keyring._updateAttributeSignature(sig.keyId, sig.attributeId, sig.signatureId, { verified: signatureInfo.verified, security: signatureInfo.security }, function(err) {
 								if(err)
 									return next3(err);
 								_attributeSignatureVerified(keyring, sig.keyId, sig.attributeId, signatureInfo, next3);

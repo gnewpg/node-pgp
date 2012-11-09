@@ -218,7 +218,8 @@ function getSignaturePacketInfo(body, callback)
 		first2HashBytes : null, // The first two bytes of the hash as 16-bit unsigned integer
 		signature : null, // The signature as buffer object
 		hashalgoSecurity : null,
-		security : null
+		security : null,
+		verified : false
 	};
 
 	var byte1 = body.readUInt8(0);
