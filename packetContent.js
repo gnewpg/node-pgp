@@ -60,8 +60,8 @@ function getPublicKeyPacketInfo(body, callback)
 		ret.keyParts = { n : keyParts[0], e : keyParts[1] };
 		ret.size = ret.keyParts.n.length;
 
-		ret.id = n.toString("hex", n.length-8).toUpperCase();
-		ret.fingerprint = hash(Buffer.concat([ keyParts.n.slice(2), keyParts.e.slice(2) ]), "md5", "hex").toUpperCase();
+		ret.id = ret.keyParts.n.buffer.toString("hex", ret.keyParts.n.buffer.length-8).toUpperCase();
+		ret.fingerprint = utils.hash(Buffer.concat([ ret.keyParts.n.buffer, ret.keyParts.e.buffer ]), "md5", "hex").toUpperCase();
 	}
 	else if(ret.version == 4)
 	{
@@ -229,7 +229,7 @@ function getSignaturePacketInfo(body, callback)
 		ret.hashedPart = body.slice(2, 2+hashedLength);
 
 		ret.sigtype = ret.hashedPart.readUInt8(0);
-		ret.date = new Date(ret.hashedPart.readUInt32BE(1));
+		ret.date = new Date(ret.hashedPart.readUInt32BE(1)*1000);
 		
 		var rest = body.slice(2+hashedLength);
 

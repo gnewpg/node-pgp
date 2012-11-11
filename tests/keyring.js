@@ -4,6 +4,7 @@ var async = require("async");
 
 var ID_CDAUTH = "299C33F4F76ADFE9";
 var ID_TDAUTH = "B183D07CBD57A7B3";
+var ID_V3 = "FFD1B4AC7C19FD19";
 
 exports.nonexistantKeyring = function(test) {
 	test.expect(2);
@@ -16,7 +17,7 @@ exports.nonexistantKeyring = function(test) {
 };
 
 exports.cdauth = function(test) {
-	test.expect(136);
+	test.expect(144);
 
 	pgp.keyringFile.getFileKeyring("keyring.tmp", function(err, keyring) {
 		test.ifError(err);
@@ -167,6 +168,47 @@ exports.cdauth = function(test) {
 					test.equals(no, 4);
 					next();
 				});
+			},
+			function(next) { // Import v3 key
+				keyring.importKeys(fs.createReadStream("v3key.pgp"), function(err, imported) {
+					test.ifError(err);
+
+					var expectedImport = [
+						{ type: pgp.consts.PKT.PUBLIC_KEY, id: ID_V3, signatures: [ ], subkeys: [ ], identities: [
+							{ type: pgp.consts.PKT.USER_ID, id: "David Engel <david@sw.ods.com>", signatures: [
+								{ type: pgp.consts.PKT.SIGNATURE, id: "A8H5G+11VKIEJ8mZPu5gwfdQOEM", issuer: ID_V3, date: new Date(856682460000), sigtype: 0x10 }
+							] },
+							{ type: pgp.consts.PKT.USER_ID, id: "David Engel <david@debian.org>", signatures: [
+								{ type: pgp.consts.PKT.SIGNATURE, id: "5zVQJ0tuHFELd6+aBVcu5LDjScA", issuer: ID_V3, date: new Date(856682530000), sigtype: 0x10 }
+							] },
+							{ type: pgp.consts.PKT.USER_ID, id: "David Engel <dlengel@home.com>", signatures: [
+								{ type: pgp.consts.PKT.SIGNATURE, id: "Xf20+l7zUNMeoAm+jhe7adGO8F4", issuer: ID_V3, date: new Date(951772637000), sigtype: 0x10 }
+							] },
+							{ type: pgp.consts.PKT.USER_ID, id: "David Engel <david@ods.com>", signatures: [
+								{ type: pgp.consts.PKT.SIGNATURE, id: "KScaCchkXZkQ7uzMH0uYZI+NI5I", issuer: ID_V3, date: new Date(896193073000), sigtype: 0x10 }
+							] },
+							{ type: pgp.consts.PKT.USER_ID, id: "David Engel <david@intrusion.com>", signatures: [
+								{ type: pgp.consts.PKT.SIGNATURE, id: "XrJrGDVU4ZHOHAZMtp17ZGBDjTo", issuer: ID_V3, date: new Date(957538728000), sigtype: 0x10 }
+							] }
+						], attributes: [ ] }
+					];
+
+					test.equals(imported.failed.length, 0);
+					test.same(imported.keys, expectedImport);
+
+					next();
+				});
+			},
+			function(next) { // Check v3 key fingerprint
+				keyring.getKey(ID_V3, function(err, key) {
+					test.ifError(err);
+					test.ok(key != null);
+					test.equals(key.fingerprint, "910B9712D9DFC8F5F9FE152D73686F78");
+					test.equals(key.date.getTime(), 856682460000);
+					test.equals(key.size, 1024);
+
+					next();
+				});
 			}
 		], function(err) {
 			test.ifError(err);
@@ -175,12 +217,3 @@ exports.cdauth = function(test) {
 		});
 	}, true);
 };
-
-/*exports.v3key = function(test) {
-	test.expect(1);
-	pgp.keyringFile.getStreamKeyring(fs.createReadStream("v3key.pgp"), function(err, keyring) {
-		test.ifError(err);
-
-		console.log(keyring);
-	});
-};*/
