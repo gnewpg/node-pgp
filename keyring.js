@@ -1083,65 +1083,60 @@ function _checkSelfSignatures(keyring, keyId, callback) {
 		if(err)
 			return callback(err);
 
-		var updates = { };
-		if(typeof keyInfo.expiresOrig == "undefined")
-		{
-			keyInfo.expiresOrig = keyInfo.expires;
-			updates.expiresOrig = keyInfo.expiresOrig;
-		}
-
-		var expire = keyInfo.expiresOrig;
-		var expireDate = -1;
-		var primary = null;
-		var primaryDate = -1;
-
-		function checkExpire(signatureInfo, next) {
-			if(signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_EXPIRE] && signatureInfo.date && signatureInfo.date.getTime() > expireDate)
-			{
-				if(signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_EXPIRE][0] == 0)
-					expire = null;
-				else
-					expire = new Date(keyInfo.date.getTime() + signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_EXPIRE][0].value*1000);
-				expireDate = signatureInfo.date.getTime();
-			}
-			next();
-		}
-
-		function checkPrimaryAndExpire(identityId, signatureInfo, next) {
-			if(signatureInfo.hashedSubPackets[consts.SIGSUBPKT.PRIMARY_UID] && signatureInfo.hashedSubPackets[consts.SIGSUBPKT.PRIMARY_UID][0].value && signatureInfo.date && signatureInfo.date.getTime() > primaryDate)
-			{
-				primary = identityId;
-				primaryDate = signatureInfo.date.getTime();
-			}
-			checkExpire(signatureInfo, next);
-		}
-
-		var filter = { verified: true, issuer: keyId, sigtype: [ consts.SIG.KEY, consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] };
-
-		async.series([
-			function(next) {
-				keyring.getKeySignatures(keyId, filter, [ "hashedSubPackets", "date" ]).forEachSeries(checkExpire, next);
-			},
-			function(next) {
-				keyring.getIdentityList(keyId).forEachSeries(function(identityId, next) {
-					keyring.getIdentitySignatures(keyId, identityId, filter, [ "hashedSubPackets", "date" ]).forEachSeries(async.apply(checkPrimaryAndExpire, identityId), next);
-				}, next);
-			},
-			function(next) {
-				keyring.getAttributeList(keyId).forEachSeries(function(attributeId, next) {
-					keyring.getAttributeSignatures(keyId, attributeId, filter, [ "hashedSubPackets", "date" ]).forEachSeries(checkExpire, next);
-				}, next);
-			}
-		], function(err) {
+		packetContent.getPublicKeyPacketInfo(keyInfo.binary, function(err, keyInfoOrig) {
 			if(err)
 				return callback(err);
 
-			updates.expires = expire;
-			updates.primary_identity = primary;
+			var expire = keyInfoOrig.expires;
+			var expireDate = -1;
+			var primary = null;
+			var primaryDate = -1;
 
-			keyring._updateKey(keyId, updates, callback);
+			function checkExpire(signatureInfo, next) {
+				if(signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_EXPIRE] && signatureInfo.date && signatureInfo.date.getTime() > expireDate)
+				{
+					if(signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_EXPIRE][0] == 0)
+						expire = null;
+					else
+						expire = new Date(keyInfo.date.getTime() + signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_EXPIRE][0].value*1000);
+					expireDate = signatureInfo.date.getTime();
+				}
+				next();
+			}
+
+			function checkPrimaryAndExpire(identityId, signatureInfo, next) {
+				if(signatureInfo.hashedSubPackets[consts.SIGSUBPKT.PRIMARY_UID] && signatureInfo.hashedSubPackets[consts.SIGSUBPKT.PRIMARY_UID][0].value && signatureInfo.date && signatureInfo.date.getTime() > primaryDate)
+				{
+					primary = identityId;
+					primaryDate = signatureInfo.date.getTime();
+				}
+				checkExpire(signatureInfo, next);
+			}
+
+			var filter = { verified: true, issuer: keyId, sigtype: [ consts.SIG.KEY, consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] };
+
+			async.series([
+				function(next) {
+					keyring.getKeySignatures(keyId, filter, [ "hashedSubPackets", "date" ]).forEachSeries(checkExpire, next);
+				},
+				function(next) {
+					keyring.getIdentityList(keyId).forEachSeries(function(identityId, next) {
+						keyring.getIdentitySignatures(keyId, identityId, filter, [ "hashedSubPackets", "date" ]).forEachSeries(async.apply(checkPrimaryAndExpire, identityId), next);
+					}, next);
+				},
+				function(next) {
+					keyring.getAttributeList(keyId).forEachSeries(function(attributeId, next) {
+						keyring.getAttributeSignatures(keyId, attributeId, filter, [ "hashedSubPackets", "date" ]).forEachSeries(checkExpire, next);
+					}, next);
+				}
+			], function(err) {
+				if(err)
+					return callback(err);
+
+				keyring._updateKey(keyId, { expires: expire, primary_identity: primary }, callback);
+			});
 		});
-	}, [ "expires", "expiresOrig", "date" ]);
+	}, [ "binary", "date" ]);
 }
 
 function _checkSubkeyExpiration(keyring, keyId, subkeyId, callback) {
@@ -1167,20 +1162,20 @@ function _checkSubkeyExpiration(keyring, keyId, subkeyId, callback) {
 			if(err)
 				return callback(err);
 
-			keyring.getSubkeySignatures(keyId, subkeyId, { sigtype: consts.SIG.SUBKEY }, [ "id", "expiresOrig", "expires" ]).forEachSeries(function(signatureInfo, next) {
-				var updates = { };
-				if(typeof signatureInfo.expiresOrig == "undefined")
-				{
-					signatureInfo.expiresOrig = signatureInfo.expires;
-					updates.expiresOrig = signatureInfo.expiresOrig;
-				}
+			keyring.getSubkeySignatures(keyId, subkeyId, { sigtype: consts.SIG.SUBKEY }, [ "id", "binary", "expires" ]).forEachSeries(function(signatureInfo, next) {
+				packetContent.getSignaturePacketInfo(signatureInfo.binary, function(err, signatureInfoOrig) {
+					if(err)
+						return next(err);
 
-				if(signatureInfo.expiresOrig != null && (expire == null || signatureInfo.expiresOrig.getTime() > expire.getTime()))
-					updates.expires = signatureInfo.expiresOrig;
-				else
-					updates.expires = expire;
+					var updates = { };
 
-				keyring._updateSubkeySignature(keyId, subkeyId, signatureInfo.id, updates, next);
+					if(signatureInfoOrig.expires != null && (expire == null || signatureInfoOrig.expires.getTime() > expire.getTime()))
+						updates.expires = signatureInfoOrig.expires;
+					else
+						updates.expires = expire;
+
+					keyring._updateSubkeySignature(keyId, subkeyId, signatureInfo.id, updates, next);
+				});
 			}, callback);
 		});
 	}, [ "date" ]);
