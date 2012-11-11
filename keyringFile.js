@@ -279,14 +279,13 @@ utils.extend(_KeyringFile.prototype, {
 		var stream = fs.createWriteStream(this._filename);
 
 		t.getKeyList().forEachSeries(function(keyId, next) {
-			t.exportKey(keyId).whilst(function(data) {
+			t.exportKey(keyId).whilst(function(data, next) {
 				stream.write(data);
+				next();
 			}, next);
 		}, function(err) {
-			if(err)
-				callback(err);
-			else
-				stream.end();
+			stream.end();
+			callback(err);
 		});
 	},
 

@@ -7,6 +7,7 @@ var Fifo = require("./fifo");
 var Filter = require("./keyringFilters");
 var async = require("async");
 var formats = require("./formats");
+var BufferedStream = require("./bufferedStream");
 
 var p = utils.proxy;
 
@@ -544,6 +545,7 @@ Keyring.prototype = {
 
 	exportKey : function(keyId, selection) {
 		var ret = new BufferedStream();
+		var t = this;
 
 		if(selection == null)
 			selection = { };
@@ -556,36 +558,45 @@ Keyring.prototype = {
 			{ tag : consts.PKT.ATTRIBUTE, list : t.getAttributeList, get : t.getAttribute, selection: selection.attributes, sub : [
 				{ tag : consts.PKT.SIGNATURE, list : t.getAttributeSignatureList, get : t.getAttributeSignature, selection: selection.signatures }
 			] },
-			{ tag : consts.PKT.PUBLIC_SUBKEY, list : t.getSubkeyList, get : t.getSubkeyList, selection: selection.subkeys, sub : [
+			{ tag : consts.PKT.PUBLIC_SUBKEY, list : t.getSubkeyList, get : t.getSubkey, selection: selection.subkeys, sub : [
 				{ tag: consts.PKT.SIGNATURE, list : t.getSubkeySignatureList, get : t.getSubkeySignature, selection: selection.signatures }
 			] }
 		];
 
 		function goThroughList(opts, args, callback) {
-			async.forEachSeries(opts || [ ], function(opt, next2) {
-				opt.list.apply(t, args).forEachSeries(function(id, next1) {
+			async.forEachSeries(opts || [ ], function(opt, next) {
+				opt.list.apply(t, args).forEachSeries(function(id, next) {
 					var args2 = args.concat([ id ]);
 					opt.get.apply(t, args2.concat([ function(err, info) {
 						if(err)
-							return next1(err);
+							return next(err);
 
 						if(opt.selection == null || opt.selection[info.id])
 						{
 							ret._sendData(packets.generatePacket(opt.tag, info.binary));
 
 							if(opt.sub)
-								return goThroughList(opt.sub, args2, next2);
+								return goThroughList(opt.sub, args2, next);
 						}
 
-						next2();
+						next();
 					}, [ "id", "binary" ] ]));
-				}, callback);
+				}, next);
 			}, callback);
 		}
 
-		goThroughList(opts, [ ], function(err) {
-			ret._endData(err);
-		});
+		t.getKey(keyId, function(err, keyInfo) {
+			if(err)
+				return ret._endData(err);
+			if(keyInfo == null)
+				return ret._endData(new Error("Key "+keyId+" does not exist."));
+
+			ret._sendData(packets.generatePacket(consts.PKT.PUBLIC_KEY, keyInfo.binary));
+
+			goThroughList(opts, [ keyId ], function(err) {
+				ret._endData(err);
+			});
+		}, [ "binary" ]);
 
 		return ret;
 	}
