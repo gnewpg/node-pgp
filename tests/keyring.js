@@ -17,7 +17,7 @@ exports.nonexistantKeyring = function(test) {
 };
 
 exports.cdauth = function(test) {
-	var expect = 3;
+	var expect = 2;
 
 	pgp.keyringFile.getFileKeyring("keyring.tmp", function(err, keyring) {
 		test.ifError(err);
@@ -83,10 +83,8 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 		function(next) { // Make sure that all identity self-signatures have been verified
 			keyring.getIdentitySignatureListByIssuer(ID_CDAUTH).forEachSeries(function(sig, next) {
 				keyring.getIdentitySignature(sig.keyId, sig.identityId, sig.signatureId, function(err, sigInfo) {
-					// 25 signatures
-
-					test.ifError(err);
-					test.ok(sigInfo.verified);
+					test.ifError(err); // 25 times
+					test.ok(sigInfo.verified); // 25 times
 
 					next();
 				});
@@ -95,10 +93,8 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 		function(next) { // Make sure that all attribute self-signatures have been verified
 			keyring.getAttributeSignatureListByIssuer(ID_CDAUTH).forEachSeries(function(sig, next) {
 				keyring.getAttributeSignature(sig.keyId, sig.attributeId, sig.signatureId, function(err, sigInfo) {
-					// 2 signatures
-
-					test.ifError(err);
-					test.ok(sigInfo.verified);
+					test.ifError(err); // 2 times
+					test.ok(sigInfo.verified); // 2 times
 
 					next();
 				});
@@ -110,10 +106,8 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 					return next();
 
 				keyring.getIdentitySignature(sig.keyId, sig.identityId, sig.signatureId, function(err, sigInfo) {
-					// 18 signatures
-
-					test.ifError(err);
-					test.ok(!sigInfo.verified);
+					test.ifError(err); // 18 times
+					test.ok(!sigInfo.verified); // 18 times
 
 					next();
 				});
@@ -125,10 +119,8 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 					return next();
 
 				keyring.getAttributeSignature(sig.keyId, sig.attributeId, sig.signatureId, function(err, sigInfo) {
-					// 2 signatures
-
-					test.ifError(err);
-					test.ok(!sigInfo.verified);
+					test.ifError(err); // 2 times
+					test.ok(!sigInfo.verified); // 2 times
 
 					next();
 				});
@@ -154,8 +146,7 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 			var no = 0;
 			keyring.getIdentityList(ID_CDAUTH, null, [ "id" ]).forEachSeries(function(identityId, next) {
 				keyring.getIdentitySignatureList(ID_CDAUTH, identityId, { verified: true }).toArraySingle(function(err, signatures) {
-					// 18 identities
-					test.ifError(err);
+					test.ifError(err); // 18 times
 
 					no += signatures.length;
 					next();
@@ -170,8 +161,7 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 			var no = 0;
 			keyring.getAttributeList(ID_CDAUTH, null, [ "id" ]).forEachSeries(function(attributeId, next) {
 				keyring.getAttributeSignatureList(ID_CDAUTH, attributeId, { verified: true }).toArraySingle(function(err, signatures) {
-					// 2 attributes
-					test.ifError(err);
+					test.ifError(err); // 2 times
 
 					no += signatures.length;
 					next();
@@ -249,5 +239,5 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 		}
 	], callback);
 
-	return 147;
+	return 148;
 };
