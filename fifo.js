@@ -193,7 +193,7 @@ utils.extend(Multiple.prototype, {
 });
 
 
-function Grep(fifo, grepFunc, sync) {
+function Grep(fifo, grepFunc) {
 	this.__fifo = fifo;
 	this.__grepFunc = grepFunc;
 }
