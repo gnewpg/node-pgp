@@ -37,7 +37,7 @@ exports.cdauth = function(test) {
 exports.cdauth.testKeyring = function(test, keyring, callback) {
 	async.series([
 		function(next) { // Import key F76ADFE9 (Candid Dauth old)
-			keyring.importKeys(fs.createReadStream("cdauth_old.pgp"), function(err, imported) {
+			keyring.importKeys(fs.createReadStream(__dirname+"/cdauth_old.pgp"), function(err, imported) {
 				test.ifError(err);
 				test.equals(imported.failed.length, 0);
 				next();
@@ -127,7 +127,7 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 			}, next);
 		},
 		function(next) { // Import key tdauth_old
-			keyring.importKeys(fs.createReadStream("tdauth_old.asc"), function(err, imported) {
+			keyring.importKeys(fs.createReadStream(__dirname+"/tdauth_old.asc"), function(err, imported) {
 				test.ifError(err);
 				//console.log(imported.failed);
 				test.equals(imported.failed.length, 0);
@@ -176,7 +176,7 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 			keyring.saveChanges(next);
 		},
 		function(next) { // Import v3 key
-			keyring.importKeys(fs.createReadStream("v3key.pgp"), function(err, imported) {
+			keyring.importKeys(fs.createReadStream(__dirname+"/v3key.pgp"), function(err, imported) {
 				test.ifError(err);
 
 				var expectedImport = [
