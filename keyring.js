@@ -186,7 +186,12 @@ Keyring.prototype = {
 					else if(!verified)
 						next(new Error("Invalid signature."));
 					else
-						_keySignatureVerified(this, keyId, signatureInfo, next);
+					{
+						async.series([
+							async.apply(p(this, this._updateKeySignature), keyId, signatureInfo.id, { verified: signatureInfo.verified, security: signatureInfo.security }),
+							async.apply(_keySignatureVerified, this, keyId, signatureInfo)
+						], next);
+					}
 				})
 			],
 			callback
@@ -249,7 +254,12 @@ Keyring.prototype = {
 					else if(!verified)
 						next(new Error("Invalid signature."));
 					else
-						_subkeySignatureVerified(this, keyId, subkeyId, signatureInfo, next);
+					{
+						async.series([
+							async.apply(p(this, this._updateSubkeySignature), keyId, subkeyId, signatureInfo.id, { verified: signatureInfo.verified, security: signatureInfo.security }),
+							async.apply(_subkeySignatureVerified, this, keyId, subkeyId, signatureInfo)
+						], next);
+					}
 				})
 			],
 			callback
@@ -312,7 +322,12 @@ Keyring.prototype = {
 					else if(!verified)
 						next(new Error("Invalid signature."));
 					else
-						_identitySignatureVerified(this, keyId, identityId, signatureInfo, next);
+					{
+						async.series([
+							async.apply(p(this, this._updateIdentitySignature), keyId, identityId, signatureInfo.id, { verified: signatureInfo.verified, security: signatureInfo.security }),
+							async.apply(_identitySignatureVerified, this, keyId, identityId, signatureInfo)
+						], next);
+					}
 				})
 			],
 			callback
@@ -375,7 +390,12 @@ Keyring.prototype = {
 					else if(!verified)
 						next(new Error("Invalid signature."));
 					else
-						_attributeSignatureVerified(this, keyId, attributeId, signatureInfo, next);
+					{
+						async.series([
+							async.apply(p(this, this._updateAttributeSignature), keyId, attributeId, signatureInfo.id, { verified: signatureInfo.verified, security: signatureInfo.security }),
+							async.apply(_attributeSignatureVerified, this, keyId, attributeId, signatureInfo)
+						], next);
+					}
 				})
 			],
 			callback
