@@ -22,6 +22,27 @@ Filter.Equals = _valueFilter(function(val1, val2) {
 });
 
 
+Filter.EqualsIgnoreCase = _valueFilter(function(val1, val2) {
+	return val1 == val2;
+}, function(value) {
+	return (""+value).toLowerCase();
+});
+
+
+Filter.ContainsIgnoreCase = _valueFilter(function(val1, val2) {
+	return val2.indexOf(val1) != -1;
+}, function(value) {
+	return (""+value).toLowerCase();
+});
+
+
+Filter.ShortKeyId = _valueFilter(function(val1, val2) {
+	return val2.substring(8) == val1;
+}, function(value) {
+	return (""+value).toLowerCase();
+});
+
+
 Filter.LessThan = _valueFilter(function(val1, val2) {
 	return val1 != null && val2 != null && val1 < val2;
 });
@@ -90,16 +111,19 @@ function _normaliseFilterValue(value) {
 		return value;
 }
 
-function _valueFilter(check) {
+function _valueFilter(check, normalise) {
+	if(!normalise)
+		normalise = _normaliseFilterValue;
+
 	var ret = function(value) {
 		this.__rawValue = value;
-		this.__value = _normaliseFilterValue(value);
+		this.__value = normalise(value);
 	};
 
 	util.inherits(ret, Filter);
 
 	ret.prototype.check = function(checkValue) {
-		return check(_normaliseFilterValue(checkValue), this.__value);
+		return check(normalise(checkValue), this.__value);
 	};
 
 	return ret;

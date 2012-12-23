@@ -619,6 +619,124 @@ Keyring.prototype = {
 		}, [ "binary" ]);
 
 		return ret;
+	},
+
+	/**
+	 * Gets the primary ID for the given key. If no primary ID is set or the set primary ID is non-public and not
+	 * contained in the given keyring, returns another ID of the key that can be displayed.
+	*/
+	getPrimaryIdentity : function(keyId, callback, fields) {
+		this.getKey(keyId, p(this, function(err, keyInfo) {
+			if(err)
+				return callback(err);
+
+			if(keyInfo.primary_identity != null)
+			{
+				this.getIdentity(keyId, keyInfo.primary_identity, p(this, function(err, identityInfo) {
+					if(err)
+						return callback(err);
+					else if(identityInfo == null)
+						findOther.call(this);
+					else
+						callback(null, identityInfo);
+				}), fields)
+			}
+			else
+				findOther.call(this);
+
+			function findOther() {
+				// TODO: Read only one
+				this.getIdentities(keyId, null, fields).forEachSeries(p(this, function(identityInfo, next) {
+					callback(null, identityInfo);
+				}), function(err) {
+					callback(err, null);
+				});
+			}
+		}), [ "primary_identity"]);
+	},
+
+	search : function(searchString) {
+		var ret = [ ];
+
+		var searchInIdentities = true;
+
+		if([ 10, 18, 34, 42 ].indexOf(searchString.length) != -1 && searchString.match(/^0x/i))
+		{
+			searchString = searchString.substring(2);
+			searchInIdentities = false;
+		}
+
+		if(searchString.length == 8)
+			ret.push(this.searchByShortKeyId(searchString));
+		else if(searchString.length == 16)
+			ret.push(this.searchByLongKeyId(searchString));
+		else if(searchString.length == 32 || searchString.length == 40)
+			ret.push(this.searchByFingerprint(searchString));
+
+		if(searchInIdentities)
+			ret.push(this.searchIdentities(searchString));
+
+		return Fifo.concat(ret);
+	},
+
+	searchIdentities : function(searchString) {
+		var ret = new Fifo();
+
+		// TODO: Handle revoked or expired identities here
+		this.getKeys(null, [ "id", "revoked", "expired" ]).forEachSeries(p(this, function(keyInfo, next) {
+			this.getIdentities(keyInfo.id, { id : new Filter.ContainsIgnoreCase(searchString) }, [ "id", "name", "email" ]).forEachSeries(function(identityInfo, next) {
+				ret.add(utils.extend(keyInfo, { identitiy: identityInfo }));
+				next();
+			}, next);
+		}), p(ret, ret._end));
+
+		return ret;
+	},
+
+	searchByShortKeyId : function(keyId) {
+		var keys = this.getKeys({ id: new Filter.ShortKeyId(keyId) }, [ "id", "revoked", "expired" ]);
+		var subkeys = new Fifo();
+
+		this.getKeys(null, [ "id", "revoked", "expired" ]).forEachSeries(p(this, function(keyInfo, next) {
+			this.getSubkeys(keyInfo.id, { id : new Filter.ShortKeyId(keyId) }, [ "id", "revoked", "expired" ]).forEachSeries(function(subkeyInfo, next) {
+				subkeys.add(utils.extend(keyInfo, { subkey: subkeyInfo }));
+				next();
+			}, next);
+		}), p(subkeys, subkeys._end));
+
+		return Fifo.concat([ keys, subkeys ]);
+	},
+
+	searchByLongKeyId : function(keyId) {
+		keyId = keyId.toUpperCase();
+
+		var keys = this.getKeys({ id: keyId }, [ "id", "revoked", "expired" ]);
+		var subkeys = new Fifo();
+
+		this.getKeys(null, [ "id", "revoked", "expired" ]).forEachSeries(p(this, function(keyInfo, next) {
+			this.getSubkeys(keyInfo.id, { id : keyId }, [ "id", "revoked", "expired" ]).forEachSeries(function(subkeyInfo, next) {
+				subkeys.add(utils.extend(keyInfo, { subkey: subkeyInfo }));
+				next();
+			}, next);
+		}), p(subkeys, subkeys._end));
+
+		return Fifo.concat([ keys, subkeys ]);
+	},
+
+	searchByFingerprint : function(keyId) {
+		keyId = keyId.toUpperCase();
+
+		var keys = this.getKeys({ fingerprint: keyId }, [ "id", "revoked", "expired" ]);
+		var subkeys = new Fifo();
+
+		this.getKeys(null, [ "id", "revoked", "expired" ]).forEachSeries(p(this, function(keyInfo, next) {
+			this.getSubkeys(keyInfo.id, { fingerprint: keyId }, [ "id", "revoked", "expired" ]).forEachSeries(function(subkeyInfo, next) {
+				subkeys.add(utils.extend(keyInfo, { subkey: subkeyInfo }));
+				next();
+			}, next);
+		}), p(subkeys, subkeys._end));
+
+		return Fifo.concat([ keys, subkeys ]);
 	}
 };
 
