@@ -221,6 +221,7 @@ returned a reduced number of bytes containing the rest of the stream.
 			; // The stream has ended. data contains the very last bytes of it.
 		else
 			; // data.length == 5
+	}, false);
 
 #### readUntilEnd(callback) ####
 
