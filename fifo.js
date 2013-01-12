@@ -234,7 +234,7 @@ utils.extend(Map.prototype, {
 				return callback(err);
 
 			var args = utils.toProperArray(arguments).slice(1);
-			this.__mapFunc.apply(null, args.concat([ callback ]));
+			this.__mapFunc.apply(null, args.concat([ callback, utils.proxy(this, function() { this.next(callback); }) ]));
 		}));
 	}
 });

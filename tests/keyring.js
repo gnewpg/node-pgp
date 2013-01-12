@@ -236,8 +236,38 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 					});
 				});
 			});
+		},
+		function(next) { // Search for key by short id
+			keyring.search("0xF76ADFE9").toArraySingle(function(err, items) {
+				test.ifError(err);
+
+				test.equals(items.length, 1);
+				test.equals(items[0].id, ID_CDAUTH);
+				test.ok(items[0].revoked != null);
+
+				next();
+			});
+		},
+		function(next) { // Search for key by id
+			keyring.search("Candid Dauth").toArraySingle(function(err, items) {
+				test.ifError(err);
+
+				test.equals(items.length, 18);
+
+				next();
+			});
+		},
+		function(next) { // Search for key by email
+			keyring.search("games@cdauth.de").toArraySingle(function(err, items) {
+				test.ifError(err);
+				test.equals(items.length, 1);
+				console.log(items[0]);
+				test.ok(items[0].identity.revoked != null);
+
+				next();
+			})
 		}
 	], callback);
 
-	return 148;
+	return 157;
 };

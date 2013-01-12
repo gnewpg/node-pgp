@@ -30,14 +30,14 @@ Filter.EqualsIgnoreCase = _valueFilter(function(val1, val2) {
 
 
 Filter.ContainsIgnoreCase = _valueFilter(function(val1, val2) {
-	return val2.indexOf(val1) != -1;
+	return val1.indexOf(val2) != -1;
 }, function(value) {
 	return (""+value).toLowerCase();
 });
 
 
 Filter.ShortKeyId = _valueFilter(function(val1, val2) {
-	return val2.substring(8) == val1;
+	return val1.substring(8) == val2;
 }, function(value) {
 	return (""+value).toLowerCase();
 });

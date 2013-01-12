@@ -62,6 +62,33 @@ Keyring.prototype = {
 
 	getSubkey : function(keyId, id, callback, fields) { _e(callback); },
 
+	getSelfSignedSubkeys : function(keyId, filter, fields) {
+		return Fifo.map(this.getSubkeys(keyId, filter, fields), p(this, function(subkeyInfo, next, skip) {
+			_newestSignature(this.getSubkeySignatures(keyId, subkeyInfo.id, { issuer: keyId, verified: true, sigtype: consts.SIG.SUBKEY }, [ "date", "expires", "revoked" ]), function(err, signatureInfo) {
+				if(err)
+					next(err);
+				else if(signatureInfo == null)
+					skip();
+				else
+					next(null, utils.extend({}, subkeyInfo, { expires: signatureInfo.expires, revoked: signatureInfo.revoked }));
+			});
+		}));
+	},
+
+	getSelfSignedSubkey : function(keyId, id, callback, fields) {
+		this.getSubkey(keyId, id, p(this, function(err, subkeyInfo) {
+			if(err || subkeyInfo == null)
+				return callback(err, subkeyInfo);
+
+			_newestSignature(this.getSubkeySignatures(keyId, id, { issuer: keyId, verified: true, sigtype: consts.SIG.SUBKEY }, [ "date", "expires", "revoked" ]), function(err, signatureInfo) {
+				if(err || signatureInfo == null)
+					return callback(err, null);
+
+				callback(null, utils.extend({}, subkeyInfo, { expires: signatureInfo.expires, revoked: signatureInfo.revoked }));
+			});
+		}), fields);
+	},
+
 	addSubkey : function(keyId, subkeyInfo, callback) {
 		_add(
 			async.apply(p(this, this.subkeyExists), keyId, subkeyInfo.id),
@@ -100,6 +127,33 @@ Keyring.prototype = {
 
 	getIdentity : function(keyId, id, callback, fields) { _e(callback); },
 
+	getSelfSignedIdentities : function(keyId, filter, fields) {
+		return Fifo.map(this.getIdentities(keyId, filter, fields), p(this, function(identityInfo, next, skip) {
+			_newestSignature(this.getIdentitySignatures(keyId, identityInfo.id, { issuer: keyId, verified: true, sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] }, [ "date", "expires", "revoked" ]), function(err, signatureInfo) {
+				if(err)
+					next(err);
+				else if(signatureInfo == null)
+					skip();
+				else
+					next(null, utils.extend({}, identityInfo, { expires: signatureInfo.expires, revoked: signatureInfo.revoked }));
+			});
+		}));
+	},
+
+	getSelfSignedIdentity : function(keyId, id, callback, fields) {
+		this.getIdentity(keyId, id, p(this, function(err, identityInfo) {
+			if(err || identityInfo == null)
+				return callback(err, identityInfo);
+
+			_newestSignature(this.getIdentitySignatures(keyId, id, { issuer: keyId, verified: true }, [ "date", "expires", "revoked" ]), function(err, signatureInfo) {
+				if(err || signatureInfo == null)
+					return callback(err, null);
+
+				callback(null, utils.extend({}, identityInfo, { expires: signatureInfo.expires, revoked: signatureInfo.revoked }));
+			});
+		}), fields);
+	},
+
 	addIdentity : function(keyId, identityInfo, callback) {
 		_add(
 			async.apply(p(this, this.identityExists), keyId, identityInfo.id),
@@ -129,6 +183,33 @@ Keyring.prototype = {
 	attributeExists : function(keyId, id, callback) { _e(callback); },
 
 	getAttribute : function(keyId, id, callback, fields) { _e(callback); },
+
+	getSelfSignedAttributes : function(keyId, filter, fields) {
+		return Fifo.map(this.getAttributes(keyId, filter, fields), p(this, function(attributeInfo, next, skip) {
+			_newestSignature(this.getAttributeSignatures(keyId, attributeInfo.id, { issuer: keyId, verified: true, sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] }, [ "date", "expires", "revoked" ]), function(err, signatureInfo) {
+				if(err)
+					next(err);
+				else if(signatureInfo == null)
+					skip();
+				else
+					next(null, utils.extend({}, attributeInfo, { expires: signatureInfo.expires, revoked: signatureInfo.revoked }));
+			});
+		}));
+	},
+
+	getSelfSignedAttribute : function(keyId, id, callback, fields) {
+		this.getAttribute(keyId, id, p(this, function(err, attributeInfo) {
+			if(err || attributeInfo == null)
+				return callback(err, attributeInfo);
+
+			_newestSignature(this.getAttributeSignatures(keyId, id, { issuer: keyId, verified: true }, [ "date", "expires", "revoked" ]), function(err, signatureInfo) {
+				if(err || signatureInfo == null)
+					return callback(err, null);
+
+				callback(null, utils.extend({}, attributeInfo, { expires: signatureInfo.expires, revoked: signatureInfo.revoked }));
+			});
+		}), fields);
+	},
 
 	addAttribute : function(keyId, attributeInfo, callback) {
 		_add(
@@ -682,23 +763,22 @@ Keyring.prototype = {
 	searchIdentities : function(searchString) {
 		var ret = new Fifo();
 
-		// TODO: Handle revoked or expired identities here
-		this.getKeys(null, [ "id", "revoked", "expired" ]).forEachSeries(p(this, function(keyInfo, next) {
-			this.getIdentities(keyInfo.id, { id : new Filter.ContainsIgnoreCase(searchString) }, [ "id", "name", "email" ]).forEachSeries(function(identityInfo, next) {
-				ret.add(utils.extend(keyInfo, { identitiy: identityInfo }));
+		this.getKeys(null, [ "id", "revoked", "expires" ]).forEachSeries(p(this, function(keyInfo, next) {
+			this.getSelfSignedIdentities(keyInfo.id, { id : new Filter.ContainsIgnoreCase(searchString) }, [ "id", "name", "email", "expires", "revoked" ]).forEachSeries(p(this, function(identityInfo, next) {
+				ret._add(utils.extend(keyInfo, { identity: identityInfo }));
 				next();
-			}, next);
+			}), next);
 		}), p(ret, ret._end));
 
 		return ret;
 	},
 
 	searchByShortKeyId : function(keyId) {
-		var keys = this.getKeys({ id: new Filter.ShortKeyId(keyId) }, [ "id", "revoked", "expired" ]);
+		var keys = this.getKeys({ id: new Filter.ShortKeyId(keyId) }, [ "id", "revoked", "expires" ]);
 		var subkeys = new Fifo();
 
-		this.getKeys(null, [ "id", "revoked", "expired" ]).forEachSeries(p(this, function(keyInfo, next) {
-			this.getSubkeys(keyInfo.id, { id : new Filter.ShortKeyId(keyId) }, [ "id", "revoked", "expired" ]).forEachSeries(function(subkeyInfo, next) {
+		this.getKeys(null, [ "id", "revoked", "expires" ]).forEachSeries(p(this, function(keyInfo, next) {
+			this.getSelfSignedSubkeys(keyInfo.id, { id : new Filter.ShortKeyId(keyId) }, [ "id", "revoked", "expires" ]).forEachSeries(function(subkeyInfo, next) {
 				subkeys.add(utils.extend(keyInfo, { subkey: subkeyInfo }));
 				next();
 			}, next);
@@ -710,11 +790,11 @@ Keyring.prototype = {
 	searchByLongKeyId : function(keyId) {
 		keyId = keyId.toUpperCase();
 
-		var keys = this.getKeys({ id: keyId }, [ "id", "revoked", "expired" ]);
+		var keys = this.getKeys({ id: keyId }, [ "id", "revoked", "expires" ]);
 		var subkeys = new Fifo();
 
-		this.getKeys(null, [ "id", "revoked", "expired" ]).forEachSeries(p(this, function(keyInfo, next) {
-			this.getSubkeys(keyInfo.id, { id : keyId }, [ "id", "revoked", "expired" ]).forEachSeries(function(subkeyInfo, next) {
+		this.getKeys(null, [ "id", "revoked", "expires" ]).forEachSeries(p(this, function(keyInfo, next) {
+			this.getSelfSignedSubkeys(keyInfo.id, { id : keyId }, [ "id", "revoked", "expires" ]).forEachSeries(function(subkeyInfo, next) {
 				subkeys.add(utils.extend(keyInfo, { subkey: subkeyInfo }));
 				next();
 			}, next);
@@ -726,11 +806,11 @@ Keyring.prototype = {
 	searchByFingerprint : function(keyId) {
 		keyId = keyId.toUpperCase();
 
-		var keys = this.getKeys({ fingerprint: keyId }, [ "id", "revoked", "expired" ]);
+		var keys = this.getKeys({ fingerprint: keyId }, [ "id", "revoked", "expires" ]);
 		var subkeys = new Fifo();
 
-		this.getKeys(null, [ "id", "revoked", "expired" ]).forEachSeries(p(this, function(keyInfo, next) {
-			this.getSubkeys(keyInfo.id, { fingerprint: keyId }, [ "id", "revoked", "expired" ]).forEachSeries(function(subkeyInfo, next) {
+		this.getKeys(null, [ "id", "revoked", "expires" ]).forEachSeries(p(this, function(keyInfo, next) {
+			this.getSelfSignedSubkeys(keyInfo.id, { fingerprint: keyId }, [ "id", "revoked", "expires" ]).forEachSeries(function(subkeyInfo, next) {
 				subkeys.add(utils.extend(keyInfo, { subkey: subkeyInfo }));
 				next();
 			}, next);
@@ -1328,4 +1408,16 @@ function _checkSubkeyExpiration(keyring, keyId, subkeyId, callback) {
 			}, callback);
 		});
 	}, [ "date" ]);
+}
+
+function _newestSignature(signatureFifo, callback) {
+	var newest = null;
+
+	signatureFifo.forEachSeries(function(signatureInfo, next) {
+		if(newest == null || signatureInfo.date.getTime() > newest.date.getTime())
+			newest = signatureInfo;
+		next();
+	}, function(err) {
+		callback(err, newest);
+	});
 }
