@@ -501,6 +501,8 @@ Keyring.prototype = {
 
 	_removeAttributeSignature : function(keyId, attributeId, id, callback) { _e(callback); },
 
+	getSignatureById : function(signatureId, callback, fields) { _e(callback); },
+
 	saveChanges : function(callback) { _e(callback); },
 
 	revertChanges : function(callback) { _e(callback); },

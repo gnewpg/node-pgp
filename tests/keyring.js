@@ -261,13 +261,21 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 			keyring.search("games@cdauth.de").toArraySingle(function(err, items) {
 				test.ifError(err);
 				test.equals(items.length, 1);
-				console.log(items[0]);
 				test.ok(items[0].identity.revoked != null);
 
-				next();
+				// Test getSignatureById
+				keyring.getSignatureById(items[0].identity.revoked, function(err, signatureInfo) {
+					test.ifError(err);
+
+					test.equals(signatureInfo.key, ID_CDAUTH);
+					test.equals(signatureInfo.identity, "Candid Dauth <games@cdauth.de>");
+					test.equals(Object.keys(signatureInfo).length, 2);
+
+					next();
+				}, [ ]);
 			})
 		}
 	], callback);
 
-	return 157;
+	return 161;
 };
