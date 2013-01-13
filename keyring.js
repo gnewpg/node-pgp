@@ -64,7 +64,7 @@ Keyring.prototype = {
 
 	getSelfSignedSubkeys : function(keyId, filter, fields) {
 		return Fifo.map(this.getSubkeys(keyId, filter, fields), p(this, function(subkeyInfo, next, skip) {
-			_newestSignature(this.getSubkeySignatures(keyId, subkeyInfo.id, { issuer: keyId, verified: true, sigtype: consts.SIG.SUBKEY }, [ "date", "expires", "revoked" ]), function(err, signatureInfo) {
+			_newestSignature(this.getSubkeySignatures(keyId, subkeyInfo.id, { issuer: keyId, verified: true, sigtype: consts.SIG.SUBKEY }, [ "date", "expires", "revoked", "security" ]), function(err, signatureInfo) {
 				if(err)
 					next(err);
 				else if(signatureInfo == null)
@@ -80,7 +80,7 @@ Keyring.prototype = {
 			if(err || subkeyInfo == null)
 				return callback(err, subkeyInfo);
 
-			_newestSignature(this.getSubkeySignatures(keyId, id, { issuer: keyId, verified: true, sigtype: consts.SIG.SUBKEY }, [ "date", "expires", "revoked" ]), function(err, signatureInfo) {
+			_newestSignature(this.getSubkeySignatures(keyId, id, { issuer: keyId, verified: true, sigtype: consts.SIG.SUBKEY }, [ "date", "expires", "revoked", "security" ]), function(err, signatureInfo) {
 				if(err || signatureInfo == null)
 					return callback(err, null);
 
@@ -129,7 +129,7 @@ Keyring.prototype = {
 
 	getSelfSignedIdentities : function(keyId, filter, fields) {
 		return Fifo.map(this.getIdentities(keyId, filter, fields), p(this, function(identityInfo, next, skip) {
-			_newestSignature(this.getIdentitySignatures(keyId, identityInfo.id, { issuer: keyId, verified: true, sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] }, [ "date", "expires", "revoked" ]), function(err, signatureInfo) {
+			_newestSignature(this.getIdentitySignatures(keyId, identityInfo.id, { issuer: keyId, verified: true, sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] }, [ "date", "expires", "revoked", "security" ]), function(err, signatureInfo) {
 				if(err)
 					next(err);
 				else if(signatureInfo == null)
@@ -145,7 +145,7 @@ Keyring.prototype = {
 			if(err || identityInfo == null)
 				return callback(err, identityInfo);
 
-			_newestSignature(this.getIdentitySignatures(keyId, id, { issuer: keyId, verified: true }, [ "date", "expires", "revoked" ]), function(err, signatureInfo) {
+			_newestSignature(this.getIdentitySignatures(keyId, id, { issuer: keyId, verified: true }, [ "date", "expires", "revoked", "security" ]), function(err, signatureInfo) {
 				if(err || signatureInfo == null)
 					return callback(err, null);
 
@@ -186,7 +186,7 @@ Keyring.prototype = {
 
 	getSelfSignedAttributes : function(keyId, filter, fields) {
 		return Fifo.map(this.getAttributes(keyId, filter, fields), p(this, function(attributeInfo, next, skip) {
-			_newestSignature(this.getAttributeSignatures(keyId, attributeInfo.id, { issuer: keyId, verified: true, sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] }, [ "date", "expires", "revoked" ]), function(err, signatureInfo) {
+			_newestSignature(this.getAttributeSignatures(keyId, attributeInfo.id, { issuer: keyId, verified: true, sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] }, [ "date", "expires", "revoked", "security" ]), function(err, signatureInfo) {
 				if(err)
 					next(err);
 				else if(signatureInfo == null)
@@ -202,7 +202,7 @@ Keyring.prototype = {
 			if(err || attributeInfo == null)
 				return callback(err, attributeInfo);
 
-			_newestSignature(this.getAttributeSignatures(keyId, id, { issuer: keyId, verified: true }, [ "date", "expires", "revoked" ]), function(err, signatureInfo) {
+			_newestSignature(this.getAttributeSignatures(keyId, id, { issuer: keyId, verified: true }, [ "date", "expires", "revoked", "security" ]), function(err, signatureInfo) {
 				if(err || signatureInfo == null)
 					return callback(err, null);
 
@@ -764,7 +764,7 @@ Keyring.prototype = {
 		var ret = new Fifo();
 
 		this.getKeys(null, [ "id", "revoked", "expires" ]).forEachSeries(p(this, function(keyInfo, next) {
-			this.getSelfSignedIdentities(keyInfo.id, { id : new Filter.ContainsIgnoreCase(searchString) }, [ "id", "name", "email", "expires", "revoked" ]).forEachSeries(p(this, function(identityInfo, next) {
+			this.getSelfSignedIdentities(keyInfo.id, { id : new Filter.ContainsIgnoreCase(searchString) }, [ "id", "name", "email", "expires", "revoked", "security" ]).forEachSeries(p(this, function(identityInfo, next) {
 				ret._add(utils.extend(keyInfo, { identity: identityInfo }));
 				next();
 			}), next);
@@ -778,7 +778,7 @@ Keyring.prototype = {
 		var subkeys = new Fifo();
 
 		this.getKeys(null, [ "id", "revoked", "expires" ]).forEachSeries(p(this, function(keyInfo, next) {
-			this.getSelfSignedSubkeys(keyInfo.id, { id : new Filter.ShortKeyId(keyId) }, [ "id", "revoked", "expires" ]).forEachSeries(function(subkeyInfo, next) {
+			this.getSelfSignedSubkeys(keyInfo.id, { id : new Filter.ShortKeyId(keyId) }, [ "id", "revoked", "expires", "security" ]).forEachSeries(function(subkeyInfo, next) {
 				subkeys.add(utils.extend(keyInfo, { subkey: subkeyInfo }));
 				next();
 			}, next);
@@ -794,7 +794,7 @@ Keyring.prototype = {
 		var subkeys = new Fifo();
 
 		this.getKeys(null, [ "id", "revoked", "expires" ]).forEachSeries(p(this, function(keyInfo, next) {
-			this.getSelfSignedSubkeys(keyInfo.id, { id : keyId }, [ "id", "revoked", "expires" ]).forEachSeries(function(subkeyInfo, next) {
+			this.getSelfSignedSubkeys(keyInfo.id, { id : keyId }, [ "id", "revoked", "expires", "security" ]).forEachSeries(function(subkeyInfo, next) {
 				subkeys.add(utils.extend(keyInfo, { subkey: subkeyInfo }));
 				next();
 			}, next);
@@ -810,7 +810,7 @@ Keyring.prototype = {
 		var subkeys = new Fifo();
 
 		this.getKeys(null, [ "id", "revoked", "expires" ]).forEachSeries(p(this, function(keyInfo, next) {
-			this.getSelfSignedSubkeys(keyInfo.id, { fingerprint: keyId }, [ "id", "revoked", "expires" ]).forEachSeries(function(subkeyInfo, next) {
+			this.getSelfSignedSubkeys(keyInfo.id, { fingerprint: keyId }, [ "id", "revoked", "expires", "security" ]).forEachSeries(function(subkeyInfo, next) {
 				subkeys.add(utils.extend(keyInfo, { subkey: subkeyInfo }));
 				next();
 			}, next);
