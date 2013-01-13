@@ -348,7 +348,7 @@ function getValueForSignatureSubPacket(type, binary) {
 		case consts.SIGSUBPKT.SIG_CREATED:
 			return new Date(binary.readUInt32BE(0)*1000);
 		case consts.SIGSUBPKT.SIG_EXPIRE:
-			return binary.readUInt16BE(0);
+			return binary.readUInt32BE(0);
 		case consts.SIGSUBPKT.EXPORTABLE:
 		case consts.SIGSUBPKT.PRIMARY_UID:
 		case consts.SIGSUBPKT.REVOCABLE:
