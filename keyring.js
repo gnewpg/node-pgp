@@ -519,7 +519,7 @@ Keyring.prototype = {
 			if(err)
 			{
 				infoObj.err = err;
-				imported.failed.push(err);
+				imported.failed.push(infoObj);
 				process.nextTick(next);
 				return null;
 			}
@@ -542,23 +542,28 @@ Keyring.prototype = {
 		var lastAttributeImported = null;
 
 		packets.splitPackets(formats.decodeKeyFormat(keyData)).forEachSeries(function(tag, header, body, next) {
+			switch(tag) {
+				case consts.PKT.PUBLIC_KEY:
+					lastKeyId = null;
+				case consts.PKT.PUBLIC_SUBKEY:
+				case consts.PKT.USER_ID:
+				case consts.PKT.ATTRIBUTE:
+					lastSubkeyId = lastIdentityId = lastAttributeId = null;
+			}
+
 			packetContent.getPacketInfo(tag, body, function(err, info) {
 				if(err)
-					return callback(err);
+					return add(null, { type: tag }, new Error("Errorneous packet."), next);
 
 				switch(tag) {
 					case consts.PKT.PUBLIC_KEY:
-						lastKeyId = info.id;
 						lastKeyImported = { type: tag, id: info.id, signatures: [ ], subkeys: [ ], identities: [ ], attributes: [ ] };
-						lastSubkeyId = lastIdentityId = lastAttributeId = null;
 						t.addKey(info, function(err) {
 							lastKeyId = add(imported.keys, lastKeyImported, err, next);
 						});
 						break;
 					case consts.PKT.PUBLIC_SUBKEY:
-						lastSubkeyId = info.id;
 						lastSubkeyImported = { type: tag, id: info.id, signatures: [ ] };
-						lastSubkeyId = lastIdentityId = lastAttributeId = null;
 
 						if(lastKeyId == null)
 							lastSubkeyId = add(null, lastSubkeyImported, new Error("Subkey without key."), next);
@@ -571,9 +576,7 @@ Keyring.prototype = {
 
 						break;
 					case consts.PKT.USER_ID:
-						lastIdentityId = info.id;
 						lastIdentityImported = { type: tag, id: info.id, signatures: [ ] };
-						lastSubkeyId = lastAttributeId = null;
 
 						if(lastKeyId == null)
 							lastIdentityId = add(null, lastIdentityImported, new Error("Identity without key."), next);
@@ -586,9 +589,7 @@ Keyring.prototype = {
 
 						break;
 					case consts.PKT.ATTRIBUTE:
-						lastAttributeId = info.id;
 						lastAttributeImported = { type: tag, id: info.id, signatures: [ ] };
-						lastSubkeyId = lastIdentityId = null;
 
 						if(lastKeyId == null)
 							lastAttributeId = add(null, lastAttributeImported, new Error("Attribute without key."), next);
