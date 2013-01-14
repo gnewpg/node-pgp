@@ -998,12 +998,11 @@ function _subkeySignatureVerified(keyring, keyId, subkeyId, signatureInfo, callb
 	var checks = [ ];
 
 	// Check 3a, 3b
-	if(signatureInfo.sigtype == consts.SIG.SUBKEY_REVOK)
-		checks.push(async.apply(_checkSubkeyRevocationStatus, keyring, keyId, subkeyId, false));
+	checks.push(async.apply(_checkSubkeyRevocationStatus, keyring, keyId, subkeyId, false));
 
 	// Check 5b
 	if(signatureInfo.sigtype == consts.SIG.SUBKEY && signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_EXPIRE])
-		checks.push(async.apply(_checkSubkeyExpiration, keyId, subkeyId));
+		checks.push(async.apply(_checkSubkeyExpiration, keyring, keyId, subkeyId));
 
 	async.series(checks, callback);
 }
@@ -1154,27 +1153,40 @@ function _checkKeyRevocationStatus(keyring, keyId, remove, callback) {
 }
 
 function _checkSubkeyRevocationStatus(keyring, keyId, subkeyId, remove, callback) {
-	keyring.getSubkeySignatures(keyId, subkeyId, { sigtype: consts.SIG.SUBKEY_REVOK, verified: true }, [ "id", "issuer" ]).forEachSeries(function(signatureInfo, next) {
-		async.waterfall([
-			function(next) {
-				if(signatureInfo.issuer == keyId)
-					next(null, true);
-				else
-					_isAuthorisedRevoker(keyring, keyId, signatureInfo.issuer, next);
-			},
-			function(authorised, next) {
-				if(authorised)
-					keyring._updateSubkey(keyId, subkeyId, { revoked: signatureInfo.id }, callback);
-				else
-					next();
+	async.series([
+		function(next) {
+			if(remove)
+			{
+				keyring.getSubkeySignatures(keyId, subkeyId, { sigtype: consts.SIG.SUBKEY, revoked: new Filter.Not(new Filter.Equals(null)) }, [ "id" ], function(signatureInfo, next) {
+					keyring._updateSubkeySignature(keyId, subkeyId, signatureInfo.id, { revoked: null }, next);
+				}, next);
 			}
-		], next);
-	}, function(err) {
-		if(err || !remove)
-			return callback(err);
-
-		keyring._updateSubkey(keyId, subkeyId, { revoked: null }, next);
-	});
+			else
+				next();
+		},
+		function(next) {
+			keyring.getSubkeySignatures(keyId, subkeyId, { sigtype: consts.SIG.SUBKEY_REVOK, verified: true }, [ "id", "issuer", "date" ]).forEachSeries(function(signatureInfo, next) {
+				async.waterfall([
+					function(next) {
+						if(signatureInfo.issuer == keyId)
+							next(null, true);
+						else
+							_isAuthorisedRevoker(keyring, keyId, signatureInfo.issuer, next);
+					},
+					function(authorised, next) {
+						if(authorised)
+						{
+							keyring.getSubkeySignatures(keyId, subkeyId, { sigtype: consts.SIG.SUBKEY }, [ "id" ]).forEachSeries(function(signatureInfo2, next) {
+								keyring._updateSubkeySignature(keyId, subkeyId, signatureInfo2.id, { revoked: signatureInfo.id }, next);
+							}, next);
+						}
+						else
+							next();
+					}
+				], next);
+			}, next);
+		}
+	], callback);
 }
 
 function _isAuthorisedRevoker(keyring, keyId, issuerId, callback) {
