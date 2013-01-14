@@ -84,7 +84,7 @@ Fifo.prototype = {
 						if(err)
 							callback(err);
 						else
-							handleNextItem();
+							process.nextTick(handleNextItem);
 					});
 					iterator.apply(null, args);
 				}

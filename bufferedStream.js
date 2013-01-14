@@ -86,19 +86,19 @@ module.exports = function(stream) {
 	
 	function sendData(data) {
 		buffer = Buffer.concat([ buffer, data ]);
-		checkRead();
+		process.nextTick(checkRead);
 	}
 	
 	function sendDataAtStart(data) {
 		buffer = Buffer.concat([ data, buffer ]);
-		checkRead();
+		process.nextTick(checkRead);
 	}
 	
 	function endData(error) {
 		ended = true;
 		endError = error;
 		
-		checkRead();
+		process.nextTick(checkRead);
 	}
 	
 	/**
@@ -115,7 +115,7 @@ module.exports = function(stream) {
 	*/
 	function read(bytes, callback, strict) {
 		wantToRead.push({ bytes: bytes, callback: callback, strict: (strict === undefined || strict === null ? true : strict) });
-		checkRead();
+		process.nextTick(checkRead);
 	};
 	
 	/**
