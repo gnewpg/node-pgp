@@ -918,8 +918,8 @@ function _add(existsFunc, addFunc, removeFunc, funcs, callback) {
  * 3. Check if a subkey has been revoked. This is the case if the key contains (verified) subkey revocation signatures. A subkey revocation signature is
  *    valid if it has been issued by a key that has also signed the key with a subkey binding signature ("parent key"), or by a key that has been authorised
  *    by the parent key to make revocations for it as described in check 2. A subkey revocation signature only revokes the subkey binding signature, not
- *    the key itself! (As that would make it possible for anyone to revoke a key by just signing it with a subkey binding signature.) This check needs
- *    to be done in the following cases:
+ *    the key itself! (As that would make it possible for anyone to revoke a key by just signing it with a subkey binding signature.) It also revokes subkey
+ *    binding signatures that have been made on a later date than the revocation signature. This check needs to be done in the following cases:
  *     a) a subkey revocation signature is verified by check 1. The subkey binding signature is revoked if the issuer is authorised.
  *     b) a subkey binding signature is verified by check 1. Check 3a is rerun on all subkey revocation signatures of the key.
  *     c) a key or certification signature is verified that contains a revocation key authorisation. All subkey revocation signatures of all keys that
