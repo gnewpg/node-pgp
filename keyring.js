@@ -1290,30 +1290,21 @@ function _checkSignatureRevocationStatus(keyring, keyId, remove, callback) {
 function _resetSignatureRevocationStatus(keyring, keyId, callback) {
 	async.series([
 		function(next) {
-			keyring.getKeySignatures(keyId, { sigtype: [ consts.SIG.KEY, consts.SIG.KEY_BY_SUBKEY ] }, [ "id", "revoked" ]).forEachSeries(function(signatureInfo, next) {
-				if(signatureInfo.revoked)
-					keyring._updateKeySignature(keyId, signatureInfo.id, { revoked: null }, next);
-				else
-					next();
+			keyring.getKeySignatures(keyId, { sigtype: [ consts.SIG.KEY, consts.SIG.KEY_BY_SUBKEY ], revoked: new Filter.Not(new Filter.Equals(null)) }, [ "id" ]).forEachSeries(function(signatureInfo, next) {
+				keyring._updateKeySignature(keyId, signatureInfo.id, { revoked: null }, next);
 			}, next);
 		},
 		function(next) {
 			keyring.getIdentityList(keyId).forEachSeries(function(identityId, next) {
-				keyring.getIdentitySignatures(keyId, identityId, { sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] }, [ "id", "revoked" ]).forEachSeries(function(signatureInfo, next) {
-					if(signatureInfo.revoked)
-						keyring._updateIdentitySignature(keyId, identityId, signatureInfo.id, { revoked: null }, next);
-					else
-						next();
+				keyring.getIdentitySignatures(keyId, identityId, { sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ], revoked: new Filter.Not(new Filter.Equals(null)) }, [ "id" ]).forEachSeries(function(signatureInfo, next) {
+					keyring._updateIdentitySignature(keyId, identityId, signatureInfo.id, { revoked: null }, next);
 				}, next);
 			}, next);
 		},
 		function(next) {
 			keyring.getAttributeList(keyId).forEachSeries(function(attributeId, next) {
-				keyring.getAttributeSignatures(keyId, attributeId, { sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] }, [ "id", "revoked" ]).forEachSeries(function(signatureInfo, next) {
-					if(signatureInfo.revoked)
-						keyring._updateAttributeSignature(keyId, attributeId, signatureInfo.id, { revoked: null }, next);
-					else
-						next();
+				keyring.getAttributeSignatures(keyId, attributeId, { sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ], revoked: new Filter.Not(new Filter.Equals(null)) }, [ "id" ]).forEachSeries(function(signatureInfo, next) {
+					keyring._updateAttributeSignature(keyId, attributeId, signatureInfo.id, { revoked: null }, next);
 				}, next);
 			}, next);
 		}
