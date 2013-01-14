@@ -749,12 +749,23 @@ Keyring.prototype = {
 			searchInIdentities = false;
 		}
 
+		var addPrimaryIdentity = p(this, function(fifo) {
+			return Fifo.map(fifo, p(this, function(keyInfo, cb) {
+				this.getPrimaryIdentity(keyInfo.id, function(err, identityInfo) {
+					if(err)
+						return cb(err);
+					keyInfo.identity = identityInfo;
+					cb(null, keyInfo);
+				}, [ "id", "name", "email" ]);
+			}));
+		});
+
 		if(searchString.length == 8)
-			ret.push(this.searchByShortKeyId(searchString));
+			ret.push(addPrimaryIdentity(this.searchByShortKeyId(searchString)));
 		else if(searchString.length == 16)
-			ret.push(this.searchByLongKeyId(searchString));
+			ret.push(addPrimaryIdentity(this.searchByLongKeyId(searchString)));
 		else if(searchString.length == 32 || searchString.length == 40)
-			ret.push(this.searchByFingerprint(searchString));
+			ret.push(addPrimaryIdentity(this.searchByFingerprint(searchString)));
 
 		if(searchInIdentities)
 			ret.push(this.searchIdentities(searchString));
