@@ -126,6 +126,13 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 				});
 			}, next);
 		},
+		function(next) { // Test primary identity
+			keyring.getPrimaryIdentity(ID_CDAUTH, function(err, identityInfo) {
+				test.ifError(err);
+				test.equals(identityInfo.id, "Candid Dauth <cdauth@cdauth.eu>");
+				next();
+			});
+		},
 		function(next) { // Import key tdauth_old
 			keyring.importKeys(fs.createReadStream(__dirname+"/tdauth_old.asc"), function(err, imported) {
 				test.ifError(err);
@@ -277,5 +284,5 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 		}
 	], callback);
 
-	return 161;
+	return 163;
 };
