@@ -899,7 +899,7 @@ function _add(existsFunc, addFunc, removeFunc, funcs, callback) {
 					async.waterfall(funcs, finish);
 			});
 		}
-	});
+	}, true); // The true parameter is a hack for subkeyExists() in node-pgp-postgres and *Exists() in gnewpg
 
 	function finish(err) {
 		if(err)
