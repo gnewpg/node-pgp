@@ -383,7 +383,7 @@ function getValueForSignatureSubPacket(type, binary) {
 			var flags = binary.readUInt32BE(0);
 			var readable = !!(flags & 0x80000000);
 			var nameLength = binary.readUInt16BE(1);
-			var valueLength = binary.readUInt1BE(3);
+			var valueLength = binary.readUInt16BE(3);
 			return {
 				name: binary.toString("utf8", 5, 5+nameLength),
 				value : readable ? binary.toString("utf8", 5+nameLength, 5+nameLength+valueLength) : binary.slice(5+nameLength, 5+nameLength+valueLength),
