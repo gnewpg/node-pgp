@@ -1,4 +1,5 @@
 var utils = require("./utils");
+var async = require("async");
 
 /**
  * Buffers the output of a readable stream and makes it readable in a predictable manner.
@@ -169,6 +170,27 @@ BufferedStream.prototype = {
 		}, function(err) {
 			otherStream._endData(err);
 		});
+	},
+
+	/**
+	 * Returns a new BufferedStream object that concatenates all the given other streams to this stream.
+	 * @param otherStream {BufferedStream|Readable Stream|Buffer|String} The other stream to append
+	 * @return {BufferedStream} A new BufferedStream
+	 */
+	concat : function(otherStream) {
+		var ret = new BufferedStream();
+		async.forEachSeries([ this ].concat(utils.toProperArray(arguments)), function(it, next) {
+			if(!it instanceof BufferedStream)
+				it = new BufferedStream(it);
+
+			it.whilst(function(data, next) {
+				ret._sendData(data);
+				next();
+			}, next);
+		}, function(err) {
+			ret._endData(err);
+		});
+		return ret;
 	}
 };
 
