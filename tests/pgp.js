@@ -1,4 +1,5 @@
 var pgp = require("..");
+var async = require("async");
 
 var TESTKEY1 = "\x99\x01\xa2\x04PW7\x9c\x11\x04\x00\x93\\:\xb9\xdf\x110A\xc9\x89\xcc\x88\x84_\xd0\
 \xd3\x14\xec9\xa7\xaf  ;6\xbd[J\x9c\xeb{\x80\xf9qy\xd4\x8f\xc6\x06\xa8\xfe\x10\x97g\"\x11J\xbd\xb9\
@@ -360,14 +361,17 @@ OH0F2cNU1G0kDpNP6T8PYJkzKTaIIhy4Ift3cql1Txg=\n\
 exports.test125Octets = function(test) {
 	var vals = [ 0 , 10, 112, 192, 2051, 8383, 8384, 9102134 ];
 	test.expect(vals.length*2);
-	vals.forEach(function(it) {
+	async.forEachSeries(vals, function(it, next) {
 		var bin = pgp.basicTypes.encode125OctetNumber(it);
 		pgp.basicTypes.read125OctetNumber(bin, function(err, number) {
 			test.ifError(err);
 			test.equal(number, it);
+
+			next();
 		});
+	}, function() {
+		test.done();
 	});
-	test.done();
 };
 
 exports.headers = function(test) {
@@ -375,8 +379,8 @@ exports.headers = function(test) {
 	var bodyLengths = [ 0 , 10, 112, 192, 2051, 8383, 8384, 9102134 ];
 	test.expect(bodyLengths.length*8);
 
-	[ false, true ].forEach(function(newHeaders) {
-		bodyLengths.forEach(function(it) {
+	async.forEachSeries([ false, true ], function(newHeaders, next) {
+		async.forEachSeries(bodyLengths, function(it, next) {
 			var header = pgp.packets.generateHeader(tag, it, newHeaders);
 			pgp.packets.getHeaderInfo(header, function(err, tag1, packetLength, header1) {
 				test.ifError(err);
@@ -384,11 +388,13 @@ exports.headers = function(test) {
 				test.equals(tag1, tag);
 				test.equals(packetLength, it);
 				test.equals(header1.toString(), header.toString());
+
+				next();
 			});
-		});
+		}, next);
+	}, function() {
+		test.done();
 	});
-	
-	test.done();
 };
 
 exports.key1 = function(test) {
