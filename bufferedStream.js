@@ -5,75 +5,67 @@ var utils = require("./utils");
  * 
  * @param stream {Readable Stream|Buffer|String} The stream to read from
 */
-module.exports = function(stream) {
-	var buffer = new Buffer(0);
-	var ended = false;
-	var endError = null;
-	var wantToRead = [ ];
-	
-	this._sendData = sendData;
-	this._sendDataAtStart = sendDataAtStart;
-	this._endData = endData;
-	this._pipe = pipe;
-	this.read = read;
-	this.readUntilEnd = readUntilEnd;
-	this.readLine = readLine;
-	this.readArbitrary = readArbitrary;
-	this.whilst = whilst;
+var BufferedStream = function(stream) {
+	this.__buffer = new Buffer(0);
+	this.__ended = false;
+	this.__endError = null;
+	this.__wantToRead = [ ];
 
 	if(stream instanceof Buffer)
 	{
-		sendData(stream);
-		endData();
+		this._sendData(stream);
+		this._endData();
 	}
 	else if(typeof stream == "string")
 	{
-		sendData(new Buffer(stream, "binary"));
-		endData();
+		this._sendData(new Buffer(stream, "binary"));
+		this._endData();
 	}
 	else if(stream != null)
 	{
-		stream.on("data", function(data) {
-			sendData(data);
-		});
-		stream.on("end", function() {
-			endData();
-		});
-		stream.on("error", function(err) {
-			endData(err);
-		});
+		stream.on("data", utils.proxy(this, function(data) {
+			this._sendData(data);
+		}));
+		stream.on("end", utils.proxy(this, function() {
+			this._endData();
+		}));
+		stream.on("error", utils.proxy(this, function(err) {
+			this._endData(err);
+		}));
 	}
+}
 
-	function checkRead() {
-		while(wantToRead.length > 0)
+BufferedStream.prototype = {
+	__checkRead : function() {
+		while(this.__wantToRead.length > 0)
 		{
-			var it = wantToRead[0];
-			var bufferBkp = buffer;
+			var it = this.__wantToRead[0];
+			var bufferBkp = this.__buffer;
 			var nlidx;
-			if(it.bytes == -3 && buffer.length > 0)
+			if(it.bytes == -3 && this.__buffer.length > 0)
 			{
-				wantToRead.shift();
-				buffer = new Buffer(0);
+				this.__wantToRead.shift();
+				this.__buffer = new Buffer(0);
 				it.callback(null, bufferBkp);
 			}
-			else if(it.bytes == -2 && (nlidx = utils.indexOf(buffer, 10)) != -1)
+			else if(it.bytes == -2 && (nlidx = utils.indexOf(this.__buffer, 10)) != -1)
 			{
-				wantToRead.shift();
-				buffer = buffer.slice(nlidx+1);
+				this.__wantToRead.shift();
+				this.__buffer = this.__buffer.slice(nlidx+1);
 				it.callback(null, bufferBkp.slice(0, nlidx+1));
 			}
-			else if(it.bytes >= 0 && buffer.length >= it.bytes)
+			else if(it.bytes >= 0 && this.__buffer.length >= it.bytes)
 			{
-				wantToRead.shift();
-				buffer = buffer.slice(it.bytes);
+				this.__wantToRead.shift();
+				this.__buffer = this.__buffer.slice(it.bytes);
 				it.callback(null, bufferBkp.slice(0, it.bytes));
 			}
-			else if(ended)
+			else if(this.__ended)
 			{
-				wantToRead.shift();
-				buffer = new Buffer(0);
-				if(endError)
-					it.callback(endError);
+				this.__wantToRead.shift();
+				this.__buffer = new Buffer(0);
+				if(this.__endError)
+					it.callback(this.__endError);
 				else if(it.strict)
 					it.callback(new Error("Stream has ended before the requested number of bytes was sent."));
 				else
@@ -82,25 +74,25 @@ module.exports = function(stream) {
 			else
 				break;
 		}
-	}
-	
-	function sendData(data) {
-		buffer = Buffer.concat([ buffer, data ]);
-		process.nextTick(checkRead);
-	}
-	
-	function sendDataAtStart(data) {
-		buffer = Buffer.concat([ data, buffer ]);
-		process.nextTick(checkRead);
-	}
-	
-	function endData(error) {
-		ended = true;
-		endError = error;
-		
-		process.nextTick(checkRead);
-	}
-	
+	},
+
+	_sendData : function(data) {
+		this.__buffer = Buffer.concat([ this.__buffer, data ]);
+		process.nextTick(utils.proxy(this, this.__checkRead));
+	},
+
+	_sendDataAtStart : function(data) {
+		this.__buffer = Buffer.concat([ data, this.__buffer ]);
+		process.nextTick(utils.proxy(this, this.__checkRead));
+	},
+
+	_endData : function(error) {
+		this.__ended = true;
+		this.__endError = error;
+
+		process.nextTick(utils.proxy(this, this.__checkRead));
+	},
+
 	/**
 	 * The callback function is called as soon as the specified number of bytes is available, receiving a possible error
 	 * message as first argument or a Buffer object with the exact specified amount of bytes as second argument.
@@ -113,74 +105,71 @@ module.exports = function(stream) {
 	 * @param callback {Function}
 	 * @param strict {Boolean} Optional, defaults to true.
 	*/
-	function read(bytes, callback, strict) {
-		wantToRead.push({ bytes: bytes, callback: callback, strict: (strict === undefined || strict === null ? true : strict) });
-		process.nextTick(checkRead);
-	};
-	
+	read : function(bytes, callback, strict) {
+		this.__wantToRead.push({ bytes: bytes, callback: callback, strict: (strict === undefined || strict === null ? true : strict) });
+		process.nextTick(utils.proxy(this, this.__checkRead));
+	},
+
 	/**
 	 * Calls the callback function exactly once: When EOF is reached with the full content or in case of an error with the error object.
 	*/
-	function readUntilEnd(callback) {
-		read(-1, callback, false);
-	};
-	
+	readUntilEnd : function(callback) {
+		this.read(-1, callback, false);
+	},
+
 	/**
 	 * Reads a line from the stream. The linebreak is also returned (except on the last line). When an empty Buffer is passed to the callback
 	 * function, this indicates that the stream has ended.
 	*/
-	function readLine(callback) {
-		read(-2, callback, false);
-	};
-	
+	readLine : function(callback) {
+		this.read(-2, callback, false);
+	},
+
 	/**
 	 * Calls the callback function with new data as soon as it is available. When an empty Buffer is passed, this means that the stream has ended.
 	*/
-	function readArbitrary(callback) {
-		read(-3, callback, false);
-	}
-	
+	readArbitrary : function(callback) {
+		this.read(-3, callback, false);
+	},
+
 	/**
 	 * Works like async.whilst. Reads an arbitrary amount of bytes from the stream and calls fn with it. When fn calls the callback(err) function
 	 * that has been passed to it as second parameter, reads more bytes and calls fn again. When the stream has ended or fn has called
 	 * the callback function with an error, the `callback` parameter is called.
 	*/
-	function whilst(fn, callback) {
-		readOn();
+	whilst : function(fn, callback) {
+		readOn.call(this);
 
 		function readOn() {
-			readArbitrary(function(err, data) {
+			this.readArbitrary(utils.proxy(this, function(err, data) {
 				if(err)
 					callback(err);
 				else if(data.length == 0)
 					callback();
 				else
 				{
-					fn(data, function(err) {
+					fn(data, utils.proxy(this, function(err) {
 						if(err)
 							callback(err);
 						else
-							readOn();
-					});
+							readOn.call(this);
+					}));
 				}
-			});
+			}));
 		}
-	}
-	
+	},
+
 	/**
 	 * Sends all data to the specified other BufferedStream.
 	*/
-	function pipe(otherStream) {
-		readArbitrary(function(err, data) {
-			if(err)
-				otherStream._endData(err);
-			else if(data.length == 0)
-				otherStream._endData();
-			else
-			{
-				otherStream._sendData(data);
-				pipe(otherStream);
-			}
+	_pipe : function(otherStream) {
+		this.whilst(function(data, next) {
+			otherStream._sendData(data);
+			next();
+		}, function(err) {
+			otherStream._endData(err);
 		});
 	}
-}
+};
+
+module.exports = BufferedStream;
