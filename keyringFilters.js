@@ -67,6 +67,8 @@ Filter.Not = function(filter) {
 	this.__filter = filter;
 };
 
+util.inherits(Filter.Not, Filter);
+
 Filter.Not.prototype.check = function(checkValue) {
 	return !this.__filter.check(checkValue);
 };
