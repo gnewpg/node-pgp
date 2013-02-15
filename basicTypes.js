@@ -90,6 +90,7 @@ function splitMPIs(data, limit)
 		ret.push(new MPI(data.slice(2+i, 2+i+bytes), length));
 		i += 2+bytes;
 	}
+	ret.bytes = i;
 	return ret;
 }
 

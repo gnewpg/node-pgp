@@ -54,11 +54,14 @@ function getPublicKeyPacketInfo(body, callback)
 			ret.expires = new Date(ret.date.getTime() + expires*86400000);
 		
 		ret.pkalgo = body.readUInt8(7);
-		ret.key = body.slice(8);
+		if(ret.pkalgo != consts.PKALGO.RSA_ES && ret.pkalgo == consts.PKALGO.RSA_E && ret.pkalgo != consts.PKALGO.RSA_S)
+			return callback(new Error("Unknown public key algorithm "+ret.pkalgo));
 		
-		var keyParts = basicTypes.splitMPIs(ret.key, 2);
+		var keyParts = basicTypes.splitMPIs(body.slice(8), 2);
 		ret.keyParts = { n : keyParts[0], e : keyParts[1] };
 		ret.size = ret.keyParts.n.length;
+
+		ret.key = body.slice(8, 8+keyParts.bytes);
 
 		ret.id = ret.keyParts.n.buffer.toString("hex", ret.keyParts.n.buffer.length-8).toUpperCase();
 		ret.fingerprint = utils.hash(Buffer.concat([ ret.keyParts.n.buffer, ret.keyParts.e.buffer ]), "md5", "hex").toUpperCase();
@@ -68,26 +71,30 @@ function getPublicKeyPacketInfo(body, callback)
 		ret.versionSecurity = consts.SECURITY.GOOD;
 		ret.date = new Date(body.readUInt32BE(1)*1000);
 		ret.pkalgo = body.readUInt8(5);
-		ret.key = body.slice(6);
 
+		var keyParts = null;
 		if(ret.pkalgo == consts.PKALGO.RSA_ES || ret.pkalgo == consts.PKALGO.RSA_E || ret.pkalgo == consts.PKALGO.RSA_S)
 		{
-			var keyParts = basicTypes.splitMPIs(ret.key, 2);
+			keyParts = basicTypes.splitMPIs(body.slice(6), 2);
 			ret.keyParts = { n : keyParts[0], e : keyParts[1] };
 			ret.size = ret.keyParts.n.length;
 		}
 		else if(ret.pkalgo == consts.PKALGO.ELGAMAL_E)
 		{
-			var keyParts = basicTypes.splitMPIs(ret.key, 3);
+			keyParts = basicTypes.splitMPIs(body.slice(6), 3);
 			ret.keyParts = { p : keyParts[0], g : keyParts[1], y : keyParts[2] };
 			ret.size = ret.keyParts.p.length;
 		}
 		else if(ret.pkalgo == consts.PKALGO.DSA)
 		{
-			var keyParts = basicTypes.splitMPIs(ret.key, 4);
+			keyParts = basicTypes.splitMPIs(body.slice(6), 4);
 			ret.keyParts = { p : keyParts[0], q : keyParts[1], g : keyParts[2], y : keyParts[3] };
 			ret.size = ret.keyParts.p.length;
 		}
+		else
+			return callback(new Error("Unknown public key algorithm "+ret.pkalgo));
+
+		ret.key = body.slice(6, 6+keyParts.bytes);
 		
 		var fingerprintData = new Buffer(body.length + 3);
 		fingerprintData.writeUInt8(0x99, 0);
