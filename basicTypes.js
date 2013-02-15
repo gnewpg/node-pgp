@@ -79,11 +79,11 @@ function encode125OctetNumber(number)
 	}
 }
 
-function splitMPIs(data)
+function splitMPIs(data, limit)
 {
 	var ret = [ ];
 	var i = 0;
-	while(i < data.length)
+	while(i < data.length && (!limit || ret.length < limit))
 	{
 		var length = data.readUInt16BE(i);
 		var bytes = Math.ceil(length/8);

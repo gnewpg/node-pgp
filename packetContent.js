@@ -56,7 +56,7 @@ function getPublicKeyPacketInfo(body, callback)
 		ret.pkalgo = body.readUInt8(7);
 		ret.key = body.slice(8);
 		
-		var keyParts = basicTypes.splitMPIs(ret.key);
+		var keyParts = basicTypes.splitMPIs(ret.key, 2);
 		ret.keyParts = { n : keyParts[0], e : keyParts[1] };
 		ret.size = ret.keyParts.n.length;
 
@@ -69,20 +69,22 @@ function getPublicKeyPacketInfo(body, callback)
 		ret.date = new Date(body.readUInt32BE(1)*1000);
 		ret.pkalgo = body.readUInt8(5);
 		ret.key = body.slice(6);
-		
-		var keyParts = basicTypes.splitMPIs(ret.key);
+
 		if(ret.pkalgo == consts.PKALGO.RSA_ES || ret.pkalgo == consts.PKALGO.RSA_E || ret.pkalgo == consts.PKALGO.RSA_S)
 		{
+			var keyParts = basicTypes.splitMPIs(ret.key, 2);
 			ret.keyParts = { n : keyParts[0], e : keyParts[1] };
 			ret.size = ret.keyParts.n.length;
 		}
 		else if(ret.pkalgo == consts.PKALGO.ELGAMAL_E)
 		{
+			var keyParts = basicTypes.splitMPIs(ret.key, 3);
 			ret.keyParts = { p : keyParts[0], g : keyParts[1], y : keyParts[2] };
 			ret.size = ret.keyParts.p.length;
 		}
 		else if(ret.pkalgo == consts.PKALGO.DSA)
 		{
+			var keyParts = basicTypes.splitMPIs(ret.key, 4);
 			ret.keyParts = { p : keyParts[0], q : keyParts[1], g : keyParts[2], y : keyParts[3] };
 			ret.size = ret.keyParts.p.length;
 		}
