@@ -3,6 +3,7 @@ var fs = require("fs");
 var async = require("async");
 
 var ID_CDAUTH = "299C33F4F76ADFE9";
+var ID_CDAUTH_NEW = "9C22F455A0CD27E9";
 var ID_TDAUTH = "B183D07CBD57A7B3";
 var ID_V3 = "FFD1B4AC7C19FD19";
 
@@ -281,8 +282,29 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 					next();
 				}, [ ]);
 			})
+		},
+		function(next) { // Import cdauth_new.pgp
+			keyring.importKeys(fs.createReadStream(__dirname+"/cdauth_new.pgp"), function(err, imported) {
+				test.ifError(err);
+				test.equals(imported.failed.length, 0);
+				next();
+			});
+		},
+		function(next) { // Find subkey suitable for signing
+			keyring.getKeyWithFlag(ID_CDAUTH_NEW, pgp.consts.KEYFLAG.SIGN, function(err, keyId) {
+				test.ifError(err);
+				test.equals(keyId, "41199B41286FC1D2");
+				next();
+			});
+		},
+		function(next) { // Find subkey suitable for encryption
+			keyring.getKeyWithFlag(ID_CDAUTH_NEW, pgp.consts.KEYFLAG.ENCRYPT_COMM, function(err, keyId) {
+				test.ifError(err);
+				test.equals(keyId, "19A29C7A53A0B130");
+				next();
+			});
 		}
 	], callback);
 
-	return 163;
+	return 169;
 };

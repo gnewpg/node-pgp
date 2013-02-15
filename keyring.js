@@ -739,6 +739,65 @@ Keyring.prototype = {
 		}), [ "primary_identity"]);
 	},
 
+	/**
+	 * Finds an active subkey that supports the given flag, i.e. one that supports encryption, signing
+	 * or authentication.
+	 * @param keyId {String} The key ID in whose subkeys to search
+	 * @param flag {Number} A flag from {@link consts.KEYFLAG}.
+	 * @param callback {Function(Error e, String id)} id is the ID of the subkey or the key itself, or
+	 *                                                it is null if no key was found.
+	 */
+	getKeyWithFlag : function(keyId, flag, callback) {
+		var ret = null;
+		var subkeyDate = null;
+		var filter = { issuer: keyId, verified: true, expires: new Filter.Not(new Filter.LessThanOrEqual(new Date())), revoked: null, hashedSubPackets: new Filter.KeyFlag(flag) };
+
+		async.series([
+			function(next) {
+				this.getSubkeyList(keyId).forEachSeries(function(subkeyId, next) {
+					this.getSubkeySignatures(keyId, subkeyId, filter, [ "date" ]).forEachSeries(function(signatureInfo, next) {
+						if(subkeyDate == null || signatureInfo.date.getTime() > subkeyDate)
+						{
+							ret = subkeyId;
+							subkeyDate = signatureInfo.date.getTime();
+						}
+						next();
+					}, next);
+				}.bind(this), next);
+			}.bind(this),
+			function(next) {
+				if(ret != null)
+					return callback(null, ret);
+
+				next();
+			},
+			function(next) {
+				// TODO: Limit 1
+				this.getKeySignatureList(keyId, filter).forEachSeries(function(signatureId, next) {
+					callback(null, keyId);
+				}, next)
+			}.bind(this),
+			function(next) {
+				this.getIdentityList(keyId).forEachSeries(function(identityId, next) {
+					// TODO: Limit 1
+					this.getIdentitySignatureList(keyId, identityId, filter).forEachSeries(function(signatureId, next) {
+						callback(null, keyId);
+					}, next);
+				}.bind(this), next);
+			}.bind(this),
+			function(next) {
+				this.getAttributeList(keyId).forEachSeries(function(attributeId, next) {
+					// TODO: Limit 1
+					this.getAttributeSignatureList(keyId, attributeId, filter).forEachSeries(function(signatureId, next) {
+						callback(null, keyId);
+					}, next);
+				}.bind(this), next);
+			}.bind(this)
+		], function(err) {
+			callback(err, null);
+		});
+	},
+
 	search : function(searchString) {
 		var ret = [ ];
 

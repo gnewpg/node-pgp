@@ -1,4 +1,5 @@
 var util = require("util");
+var consts = require("./consts");
 
 
 var Filter = function() { };
@@ -104,6 +105,20 @@ Filter.And.prototype.check = function(checkValue) {
 	}
 	return true;
 };
+
+
+/**
+ * Checks whether a signature sets a specific key flag in its sub-packets
+ */
+Filter.KeyFlag = _valueFilter(function(subPackets, flag) {
+	var pkts = subPackets[consts.SIGSUBPKT.KEY_FLAGS] || [ ];
+	for(var i=0; i<pkts.length; i++)
+	{
+		if(pkts[i].value[flag])
+			return true;
+	}
+	return false;
+});
 
 
 function _normaliseFilterValue(value) {
