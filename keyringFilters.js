@@ -131,18 +131,4 @@ function _valueFilter(check, normalise) {
 	return ret;
 }
 
-function _inheritFilter(getFilter) {
-	var ret = function(value) {
-		this.__filter = getFilter(value);
-	};
-
-	util.inherits(ret, Filter);
-
-	ret.prototype.check = function(checkValue) {
-		return this.__filter.check(checkValue);
-	};
-
-	return ret;
-}
-
 module.exports = Filter;
