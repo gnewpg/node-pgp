@@ -744,11 +744,12 @@ Keyring.prototype = {
 	 * or authentication.
 	 * @param keyId {String} The key ID in whose subkeys to search
 	 * @param flag {Number} A flag from {@link consts.KEYFLAG}.
-	 * @param callback {Function(Error e, String id)} id is the ID of the subkey or the key itself, or
-	 *                                                it is null if no key was found.
+	 * @param callback {Function(Error e, Object keyInfo)} keyInfo is the id info of the subkey or the key itself, or
+	 *                                                     null if no key was found.
+	 * @param fields {Array}
 	 */
-	getKeyWithFlag : function(keyId, flag, callback) {
-		var ret = null;
+	getKeyWithFlag : function(keyId, flag, callback, fields) {
+		var id = null;
 		var subkeyDate = null;
 		var filter = { issuer: keyId, verified: true, expires: new Filter.Not(new Filter.LessThanOrEqual(new Date())), revoked: null, hashedSubPackets: new Filter.KeyFlag(flag) };
 
@@ -758,7 +759,7 @@ Keyring.prototype = {
 					this.getSubkeySignatures(keyId, subkeyId, filter, [ "date" ]).forEachSeries(function(signatureInfo, next) {
 						if(subkeyDate == null || signatureInfo.date.getTime() > subkeyDate)
 						{
-							ret = subkeyId;
+							id = subkeyId;
 							subkeyDate = signatureInfo.date.getTime();
 						}
 						next();
@@ -766,31 +767,31 @@ Keyring.prototype = {
 				}.bind(this), next);
 			}.bind(this),
 			function(next) {
-				if(ret != null)
-					return callback(null, ret);
+				if(id != null)
+					return this.getSubkey(keyId, id, callback, fields);
 
 				next();
-			},
+			}.bind(this),
 			function(next) {
 				// TODO: Limit 1
 				this.getKeySignatureList(keyId, filter).forEachSeries(function(signatureId, next) {
-					callback(null, keyId);
-				}, next)
+					this.getKey(keyId, callback, fields);
+				}.bind(this), next);
 			}.bind(this),
 			function(next) {
 				this.getIdentityList(keyId).forEachSeries(function(identityId, next) {
 					// TODO: Limit 1
 					this.getIdentitySignatureList(keyId, identityId, filter).forEachSeries(function(signatureId, next) {
-						callback(null, keyId);
-					}, next);
+						this.getKey(keyId, callback, fields);
+					}.bind(this), next);
 				}.bind(this), next);
 			}.bind(this),
 			function(next) {
 				this.getAttributeList(keyId).forEachSeries(function(attributeId, next) {
 					// TODO: Limit 1
 					this.getAttributeSignatureList(keyId, attributeId, filter).forEachSeries(function(signatureId, next) {
-						callback(null, keyId);
-					}, next);
+						this.getKey(keyId, callback, fields);
+					}.bind(this), next);
 				}.bind(this), next);
 			}.bind(this)
 		], function(err) {

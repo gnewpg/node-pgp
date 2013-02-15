@@ -291,18 +291,18 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 			});
 		},
 		function(next) { // Find subkey suitable for signing
-			keyring.getKeyWithFlag(ID_CDAUTH_NEW, pgp.consts.KEYFLAG.SIGN, function(err, keyId) {
+			keyring.getKeyWithFlag(ID_CDAUTH_NEW, pgp.consts.KEYFLAG.SIGN, function(err, keyInfo) {
 				test.ifError(err);
-				test.equals(keyId, "41199B41286FC1D2");
+				test.equals(keyInfo.id, "41199B41286FC1D2");
 				next();
-			});
+			}, [ "id" ]);
 		},
 		function(next) { // Find subkey suitable for encryption
-			keyring.getKeyWithFlag(ID_CDAUTH_NEW, pgp.consts.KEYFLAG.ENCRYPT_COMM, function(err, keyId) {
+			keyring.getKeyWithFlag(ID_CDAUTH_NEW, pgp.consts.KEYFLAG.ENCRYPT_COMM, function(err, keyInfo) {
 				test.ifError(err);
-				test.equals(keyId, "19A29C7A53A0B130");
+				test.equals(keyInfo.id, "19A29C7A53A0B130");
 				next();
-			});
+			}, [ "id" ]);
 		}
 	], callback);
 
