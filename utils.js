@@ -90,6 +90,19 @@ function callback(func) {
 	};
 }
 
+var RANDOM_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+/**
+ * Generates a random string of the specified length made of letters and numbers.
+ * @param length {Number}
+*/
+function generateRandomString(length) {
+	var ret = "";
+	for(var i=0; i<length; i++)
+		ret += RANDOM_CHARS.charAt(Math.floor(Math.random()*RANDOM_CHARS.length));
+	return ret;
+}
+
 exports.getTempFilename = getTempFilename;
 exports.hash = hash;
 exports.toProperArray = toProperArray;
@@ -97,3 +110,4 @@ exports.indexOf = indexOf;
 exports.proxy = proxy;
 exports.extend = extend;
 exports.callback = callback;
+exports.generateRandomString = generateRandomString;
