@@ -746,57 +746,90 @@ Keyring.prototype = {
 	 * @param flag {Number} A flag from {@link consts.KEYFLAG}.
 	 * @param callback {Function(Error e, Object keyInfo)} keyInfo is the id info of the subkey or the key itself, or
 	 *                                                     null if no key was found.
-	 * @param fields {Array}
 	 */
 	getKeyWithFlag : function(keyId, flag, callback, fields) {
 		var id = null;
-		var subkeyDate = null;
-		var filter = { issuer: keyId, verified: true, expires: new Filter.Not(new Filter.LessThanOrEqual(new Date())), revoked: null, hashedSubPackets: new Filter.KeyFlag(flag) };
+		var filter = { issuer: keyId, verified: true, expires: new Filter.Not(new Filter.LessThanOrEqual(new Date())), revoked: null };
 
-		async.series([
-			function(next) {
-				this.getSubkeyList(keyId).forEachSeries(function(subkeyId, next) {
-					this.getSubkeySignatures(keyId, subkeyId, filter, [ "date" ]).forEachSeries(function(signatureInfo, next) {
-						if(subkeyDate == null || signatureInfo.date.getTime() > subkeyDate)
-						{
-							id = subkeyId;
-							subkeyDate = signatureInfo.date.getTime();
-						}
-						next();
-					}, next);
-				}.bind(this), next);
-			}.bind(this),
-			function(next) {
-				if(id != null)
-					return this.getSubkey(keyId, id, callback, fields);
+		var isPkalgoRelatedFlag = ([ consts.KEYFLAG.SIGN, consts.KEYFLAG.ENCRYPT_COMM, consts.KEYFLAG.ENCRYPT_FILES, consts.KEYFLAG.AUTH ].indexOf(flag) != -1);
+		var sigDate = null;
+		var supports = null;
 
+		this.getSubkeys(keyId, null, [ "id", "pkalgo" ]).forEachSeries(function(subkeyInfo, next) {
+			if(isPkalgoRelatedFlag && consts.PKALGO_KEYFLAGS[subkeyInfo.pkalgo] && consts.PKALGO_KEYFLAGS[subkeyInfo.pkalgo].indexOf(flag) == -1)
+				return next(); // pkalgo does not support this flag
+
+			sigDate = null;
+			supports = isPkalgoRelatedFlag; // For signing, encryption and authentication, default to true unless overridden by signature
+			this.getSubkeySignatures(keyId, subkeyInfo.id, filter, [ "date", "hashedSubPackets" ]).forEachSeries(function(signatureInfo, next) {
+				if(signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_FLAGS] && (sigDate == null || signatureInfo.date.getTime() > sigDate))
+				{
+					supports = signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_FLAGS][0].value[flag];
+					sigDate = signatureInfo.date.getTime();
+				}
 				next();
-			}.bind(this),
-			function(next) {
-				// TODO: Limit 1
-				this.getKeySignatureList(keyId, filter).forEachSeries(function(signatureId, next) {
-					this.getKey(keyId, callback, fields);
-				}.bind(this), next);
-			}.bind(this),
-			function(next) {
-				this.getIdentityList(keyId).forEachSeries(function(identityId, next) {
-					// TODO: Limit 1
-					this.getIdentitySignatureList(keyId, identityId, filter).forEachSeries(function(signatureId, next) {
-						this.getKey(keyId, callback, fields);
-					}.bind(this), next);
-				}.bind(this), next);
-			}.bind(this),
-			function(next) {
-				this.getAttributeList(keyId).forEachSeries(function(attributeId, next) {
-					// TODO: Limit 1
-					this.getAttributeSignatureList(keyId, attributeId, filter).forEachSeries(function(signatureId, next) {
-						this.getKey(keyId, callback, fields);
-					}.bind(this), next);
-				}.bind(this), next);
-			}.bind(this)
-		], function(err) {
-			callback(err, null);
-		});
+			}, function(err) {
+				if(err)
+					return next(err);
+
+				if(supports)
+					this.getSubkey(keyId, subkeyInfo.id, callback, fields);
+				else
+					next();
+			}.bind(this));
+		}.bind(this), function(err) {
+			if(err)
+				return callback(err);
+
+			// No supporting subkey found, check main key
+
+			var fields2 = [ ].concat(fields);
+			if(fields2.indexOf("id") == -1)
+				fields2.push("id");
+			if(fields2.indexOf("pkalgo") == -1)
+				fields2.push("pkalgo");
+			if(fields2.indexOf("revoked") == -1)
+				fields2.push("revoked");
+			if(fields2.indexOf("expires") == -1)
+				fields2.push("expires");
+
+			this.getKey(keyId, function(err, keyInfo) {
+				if(err)
+					return callback(err);
+
+				if(keyInfo.revoked || (keyInfo.expires && keyInfo.expires.getTime() < (new Date()).getTime()))
+					return callback(null, null);
+
+				if(isPkalgoRelatedFlag && consts.PKALGO_KEYFLAGS[keyInfo.pkalgo] && consts.PKALGO_KEYFLAGS[keyInfo.pkalgo].indexOf(flag) == -1)
+					return callback(null); // Pkalgo does not support flag
+
+				sigDate = null;
+				supports = isPkalgoRelatedFlag || flag == consts.KEYFLAG.CERT;
+
+				var signatures = Fifo.fromArraySingle([
+					this.getKeySignatures(keyId, filter, [ "date", "hashedSubPackets" ]),
+					this.getIdentityList(keyId).map(function(identityId, next) { next(null, this.getIdentitySignatures(keyId, identityId, filter, [ "date", "hashedSubPackets" ])); }.bind(this)),
+					this.getAttributeList(keyId).map(function(attributeId, next) { next(null, this.getAttributeSignatures(keyId, attributeId, filter, [ "date", "hashedSubPackets" ])); }.bind(this))
+				]).recursive();
+
+				signatures.forEachSeries(function(signatureInfo, next) {
+					if(signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_FLAGS] && (sigDate == null || signatureInfo.date.getTime() > sigDate))
+					{
+						supports = signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_FLAGS][0].value[flag];
+						sigDate = signatureInfo.date.getTime();
+					}
+					next();
+				}, function(err) {
+					if(err)
+						return callback(err);
+
+					if(supports)
+						callback(null, keyInfo);
+					else
+						callback(null, null);
+				});
+			}.bind(this), fields2);
+		}.bind(this));
 	},
 
 	search : function(searchString) {

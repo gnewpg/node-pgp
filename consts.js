@@ -108,6 +108,15 @@ exports.PKALGO = {
 	DSA           : 17 /* DSA (Digital Signature Algorithm) */
 };
 
+// Which public key algorithms support encryption, signing or authentication
+exports.PKALGO_KEYFLAGS = {
+	1: [ exports.KEYFLAG.SIGN, exports.KEYFLAG.ENCRYPT_COMM, exports.KEYFLAG.ENCRYPT_FILES, exports.KEYFLAG.AUTH ],
+	2: [ exports.KEYFLAG.ENCRYPT_COMM, exports.KEYFLAG.ENCRYPT_FILES ],
+	3: [ exports.KEYFLAG.SIGN, exports.KEYFLAG.AUTH ],
+	16: [ exports.KEYFLAG.ENCRYPT_COMM, exports.KEYFLAG.ENCRYPT_FILES ],
+	17: [ exports.KEYFLAG.SIGN, exports.KEYFLAG.AUTH ]
+};
+
 // Hash algorithms
 exports.HASHALGO = {
 	MD5           : 1,
