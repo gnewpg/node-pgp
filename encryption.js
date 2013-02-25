@@ -7,7 +7,7 @@ var consts = require("./consts");
 var BufferedStream = require("./bufferedStream");
 var async = require("async");
 
-function encryptData(keyring, toKeyId, data, callback, acceptRevoked) {
+function encryptData(keyring, toKeyId, data, callback) {
 	if(!Array.isArray(toKeyId))
 		toKeyId = [ toKeyId ];
 
@@ -31,7 +31,7 @@ function encryptData(keyring, toKeyId, data, callback, acceptRevoked) {
 					recipients.push(keyInfo.id);
 					var packet = packets.generatePacket(consts.PKT.PUBLIC_KEY, keyInfo.binary);
 					fs.write(res.file, fs.writeFile(res.fname, packet, 0, packet.length, null, next));
-				}, [ "id", "binary" ], acceptRevoked);
+				}, [ "id", "binary" ]);
 			}, next);
 		} ],
 		encrypt: [ "write", function(next, res) {
