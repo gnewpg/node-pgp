@@ -5,8 +5,6 @@ module.exports = Fifo;
 module.exports.fromArraySingle = function(arr) { return new ArraySingle(arr); };
 module.exports.fromArrayMultiple = function(arr) { return new ArrayMultiple(arr); };
 module.exports.concat = function(fifos) { return new Multiple(fifos); };
-module.exports.grep = function(fifo, grepFunc) { return new Grep(fifo, grepFunc); };
-module.exports.map = function(fifo, mapFunc) { return new Map(fifo, mapFunc); };
 
 function Fifo() {
 	this.__listeners = [ ];
@@ -120,6 +118,18 @@ Fifo.prototype = {
 			else
 				callback(null, ret);
 		});
+	},
+
+	grep : function(grepFunc) {
+		return new Grep(this, grepFunc);
+	},
+
+	map : function(mapFunc) {
+		return new Map(this, mapFunc);
+	},
+
+	concat : function(fifo1) {
+		return new Multiple([ this ].concat(utils.toProperArray(arguments)));
 	}
 };
 

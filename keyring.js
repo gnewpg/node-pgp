@@ -63,7 +63,7 @@ Keyring.prototype = {
 	getSubkey : function(keyId, id, callback, fields) { _e(callback); },
 
 	getSelfSignedSubkeys : function(keyId, filter, fields) {
-		return Fifo.map(this.getSubkeys(keyId, filter, fields), p(this, function(subkeyInfo, next, skip) {
+		return this.getSubkeys(keyId, filter, fields).map(p(this, function(subkeyInfo, next, skip) {
 			_newestSignature(this.getSubkeySignatures(keyId, subkeyInfo.id, { issuer: keyId, verified: true, sigtype: consts.SIG.SUBKEY }, [ "date", "expires", "revoked", "security" ]), function(err, signatureInfo) {
 				if(err)
 					next(err);
@@ -128,7 +128,7 @@ Keyring.prototype = {
 	getIdentity : function(keyId, id, callback, fields) { _e(callback); },
 
 	getSelfSignedIdentities : function(keyId, filter, fields) {
-		return Fifo.map(this.getIdentities(keyId, filter, fields), p(this, function(identityInfo, next, skip) {
+		return this.getIdentities(keyId, filter, fields).map(p(this, function(identityInfo, next, skip) {
 			_newestSignature(this.getIdentitySignatures(keyId, identityInfo.id, { issuer: keyId, verified: true, sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] }, [ "date", "expires", "revoked", "security" ]), function(err, signatureInfo) {
 				if(err)
 					next(err);
@@ -185,7 +185,7 @@ Keyring.prototype = {
 	getAttribute : function(keyId, id, callback, fields) { _e(callback); },
 
 	getSelfSignedAttributes : function(keyId, filter, fields) {
-		return Fifo.map(this.getAttributes(keyId, filter, fields), p(this, function(attributeInfo, next, skip) {
+		return this.getAttributes(keyId, filter, fields).map(p(this, function(attributeInfo, next, skip) {
 			_newestSignature(this.getAttributeSignatures(keyId, attributeInfo.id, { issuer: keyId, verified: true, sigtype: [ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] }, [ "date", "expires", "revoked", "security" ]), function(err, signatureInfo) {
 				if(err)
 					next(err);
@@ -811,7 +811,7 @@ Keyring.prototype = {
 		}
 
 		var addPrimaryIdentity = p(this, function(fifo) {
-			return Fifo.map(fifo, p(this, function(keyInfo, cb) {
+			return fifo.map(p(this, function(keyInfo, cb) {
 				this.getPrimaryIdentity(keyInfo.id, function(err, identityInfo) {
 					if(err)
 						return cb(err);
@@ -924,7 +924,7 @@ function _filter(list, filter) {
 	if(filter == null || Object.keys(filter).length == 0)
 		return list;
 
-	return Fifo.grep(list, function(item, callback) {
+	return list.grep(function(item, callback) {
 		for(var i in filter)
 		{
 			if(!Filter.get(filter[i]).check(item[i]))

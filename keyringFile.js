@@ -345,7 +345,7 @@ function _getList(filter, obj, idx) {
 		fifo._add(obj[i]);
 	fifo._end();
 
-	return Fifo.map(Keyring._filter(fifo, filter), function(item, callback) {
+	return Keyring._filter(fifo, filter).map(function(item, callback) {
 		callback(null, item.id);
 	});
 }
