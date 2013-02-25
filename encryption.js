@@ -14,16 +14,13 @@ function encryptData(keyring, toKeyId, data, callback) {
 	var recipients = [ ];
 
 	async.auto({
-		key: function(next) {
-			keyring.getKeyWithFlag(toKeyId, consts.KEYFLAG.ENCRYPT_COMM, next, [ "id", "binary" ]);
-		},
 		fname: function(next) {
 			utils.getTempFilename(next);
 		},
 		file: [ "fname", function(next, res) {
 			fs.open(res.fname, "w", next);
 		} ],
-		write: [ "key", "fname", function(next, res) {
+		write: [ "file", function(next, res) {
 			async.forEachSeries(toKeyId, function(it, next) {
 				keyring.getKeyWithFlag(it, consts.KEYFLAG.ENCRYPT_COMM, function(err, keyInfo) {
 					if(err)
@@ -47,13 +44,23 @@ function encryptData(keyring, toKeyId, data, callback) {
 			new BufferedStream(gpg.stdout).readUntilEnd(next);
 		}]
 	}, function(err, res) {
-		if(res.fname)
-		{
-			fs.unlink(res.fname, function(err) {
+		async.series([
+			function(next) {
+				if(res && res.file)
+					fs.close(res.file, next);
+				else
+					next();
+			},
+			function(next) {
+				if(res && res.fname)
+					fs.unlink(res.fname, next);
+				else
+					next();
+			}
+		], function(err) {
 				if(err)
 					console.log("Error removing temporary file "+res.fname+".", err);
-			});
-		}
+		});
 
 		if(err)
 			callback(err);
