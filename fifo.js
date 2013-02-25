@@ -130,6 +130,10 @@ Fifo.prototype = {
 
 	concat : function(fifo1) {
 		return new Multiple([ this ].concat(utils.toProperArray(arguments)));
+	},
+
+	recursive : function() {
+		return new Recursive(this);
 	}
 };
 
@@ -199,6 +203,40 @@ utils.extend(Multiple.prototype, {
 					callback.apply(null, arguments);
 			}));
 		}
+	}
+});
+
+function Recursive(fifoFifo) {
+	this.__fifoFifo = fifoFifo;
+	this.__parents = [ ];
+}
+
+util.inherits(Recursive, Fifo);
+
+utils.extend(Recursive.prototype, {
+	next : function(callback) {
+		this.__fifoFifo.next(function(err, item) {
+			if(err === true)
+			{
+				if(this.__parents.length == 0)
+					callback(true);
+				else
+				{
+					this.__fifoFifo = this.__parents.pop();
+					this.next(callback);
+				}
+			}
+			else if(err)
+				callback(err);
+			else if(item instanceof Fifo)
+			{
+				this.__parents.push(this.__fifoFifo);
+				this.__fifoFifo = item;
+				this.next(callback);
+			}
+			else
+				callback.apply(null, arguments);
+		}.bind(this));
 	}
 });
 
