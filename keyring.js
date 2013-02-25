@@ -746,10 +746,43 @@ Keyring.prototype = {
 	 * @param flag {Number} A flag from {@link consts.KEYFLAG}.
 	 * @param callback {Function(Error e, Object keyInfo)} keyInfo is the id info of the subkey or the key itself, or
 	 *                                                     null if no key was found.
+	 * @param [fields] {Array}
+	 * @param [ignoreRevoked] {Boolean} If set to true, ignore the revocation and expiration status of keys.
+	 *                                  Set to 2 to only ignore the expiration status. Non-revoked keys will
+	 *                                  always be preferred over revoked keys and non-expired keys over expired
+	 *                                  keys. Expired keys will be preferred over revoked keys.
 	 */
-	getKeyWithFlag : function(keyId, flag, callback, fields) {
+	getKeyWithFlag : function(keyId, flag, callback, fields, ignoreRevoked) {
+		if(ignoreRevoked && ignoreRevoked != -1 && ignoreRevoked != -2)
+		{
+			return async.waterfall([
+				function(next) {
+					// Search for non-revoked and non-expired keys
+					this.getKeyWithFlag(keyId, flag, next, fields, false);
+				}.bind(this),
+				function(key, next) {
+					if(key)
+						return callback(null, key);
+
+					// Fallback: search for expired keys
+					this.getKeyWithFlag(keyId, flag, next, fields, -1);
+				}.bind(this),
+				function(key, next) {
+					if(key || ignoreRevoked == 2)
+						return callback(null, key);
+
+					// Fallback: search for revoked keys
+					this.getKeyWithFlag(keyId, flag, next, fields, -2);
+				}.bind(this)
+			], callback);
+		}
+
 		var id = null;
-		var filter = { issuer: keyId, verified: true, expires: new Filter.Not(new Filter.LessThanOrEqual(new Date())), revoked: null };
+		var filter = { issuer: keyId, verified: true };
+		if(ignoreRevoked != -1 && ignoreRevoked != -2)
+			filter.expires = new Filter.Not(new Filter.LessThanOrEqual(new Date()));
+		if(ignoreRevoked != -2)
+			filter.revoked = null;
 
 		var isPkalgoRelatedFlag = ([ consts.KEYFLAG.SIGN, consts.KEYFLAG.ENCRYPT_COMM, consts.KEYFLAG.ENCRYPT_FILES, consts.KEYFLAG.AUTH ].indexOf(flag) != -1);
 		var sigDate = null;
@@ -797,7 +830,7 @@ Keyring.prototype = {
 				if(err)
 					return callback(err);
 
-				if(keyInfo.revoked || (keyInfo.expires && keyInfo.expires.getTime() < (new Date()).getTime()))
+				if((ignoreRevoked != -2 && keyInfo.revoked) || (ignoreRevoked != -1 && ignoreRevoked != -2 && keyInfo.expires != null && keyInfo.expires.getTime() < (new Date()).getTime()))
 					return callback(null, null);
 
 				if(isPkalgoRelatedFlag && consts.PKALGO_KEYFLAGS[keyInfo.pkalgo] && consts.PKALGO_KEYFLAGS[keyInfo.pkalgo].indexOf(flag) == -1)
