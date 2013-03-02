@@ -515,20 +515,15 @@ Keyring.prototype = {
 			failed : [ ]
 		};
 
-		function add(addTo, infoObj, err, next) {
-			if(err)
-			{
-				infoObj.err = err;
-				imported.failed.push(infoObj);
-				process.nextTick(next);
-				return null;
-			}
-			else
-			{
-				addTo.push(infoObj);
-				process.nextTick(next);
-				return infoObj.id;
-			}
+		function add(addTo, infoObj, next) {
+			addTo.push(infoObj);
+			process.nextTick(next);
+		}
+
+		function addError(infoObj, err, next) {
+			infoObj.err = err;
+			imported.failed.push(infoObj);
+			process.nextTick(next);
 		}
 
 		var lastKeyId = null;
@@ -541,109 +536,242 @@ Keyring.prototype = {
 		var lastIdentityImported = null;
 		var lastAttributeImported = null;
 
+		var cleanEmptyKey = function(callback) {
+			if(lastKeyId == null)
+				return callback(null);
+
+			_listEmpty(this.getKeySignatureList(lastKeyId, { issuer: lastKeyId, verified: true }).concat(this.getSubkeyList(lastKeyId), this.getIdentityList(lastKeyId), this.getAttributeList(lastKeyId)), function(err, empty) {
+				if(err)
+					return callback(err);
+				if(!empty) {
+					lastKeyId = null;
+					return add(imported.keys, lastKeyImported, callback);
+				}
+
+				this.removeKey(lastKeyId, function(err) {
+					if(err)
+						return callback(err);
+
+					lastKeyId = null;
+					addError(lastKeyImported, new Error("Key without self-signatures"), callback);
+				});
+			}.bind(this));
+		}.bind(this);
+
+		var cleanEmptySubkey = function(callback) {
+			if(lastSubkeyId == null)
+				return callback(null);
+
+			_listEmpty(this.getSubkeySignatureList(lastKeyId, lastSubkeyId, { issuer: lastKeyId, verified: true }), function(err, empty) {
+				if(err)
+					return callback(err);
+				if(!empty) {
+					lastSubkeyId = null;
+					return add(lastKeyImported.subkeys, lastSubkeyImported, callback);
+				}
+
+				this.removeSubkey(lastKeyId, lastSubkeyId, function(err) {
+					if(err)
+						return callback(err);
+
+					lastSubkeyId = null;
+					addError(lastSubkeyImported, new Error("Subkey without signatures"), callback);
+				});
+			}.bind(this));
+		}.bind(this);
+
+		var cleanEmptyIdentity = function(callback) {
+			if(lastIdentityId == null)
+				return callback(null);
+
+			_listEmpty(this.getIdentitySignatureList(lastKeyId, lastIdentityId, { issuer: lastKeyId, verified: true }), function(err, empty) {
+				if(err)
+					return callback(err);
+				if(!empty) {
+					lastIdentityId = null;
+					return add(lastKeyImported.identities, lastIdentityImported, callback);
+				}
+
+				this.removeIdentity(lastKeyId, lastIdentityId, function(err) {
+					if(err)
+						return callback(err);
+
+					lastIdentityId = null;
+					addError(lastIdentityImported, new Error("Identity without self-signatures"), callback);
+				});
+			}.bind(this));
+		}.bind(this);
+
+		var cleanEmptyAttribute = function(callback) {
+			if(lastAttributeId == null)
+				return callback(null);
+
+			_listEmpty(this.getAttributeSignatureList(lastKeyId, lastAttributeId, { issuer: lastKeyId, verified: true }), function(err, empty) {
+				if(err)
+					return callback(err);
+				if(!empty) {
+					lastAttributeId = null;
+					return add(lastKeyImported.attributes, lastAttributeImported, callback);
+				}
+
+				this.removeAttribute(lastKeyId, lastAttributeId, function(err) {
+					if(err)
+						return callback(err);
+
+					lastAttributeId = null;
+					addError(lastAttributeImported, new Error("Attribute without self-signatures"), callback);
+				});
+			}.bind(this));
+		}.bind(this);
+
 		packets.splitPackets(formats.decodeKeyFormat(keyData)).forEachSeries(function(tag, header, body, next) {
+			var cleanups = [ ];
 			switch(tag) {
 				case consts.PKT.PUBLIC_KEY:
-					lastKeyId = null;
+					cleanups.push(cleanEmptyKey);
 				case consts.PKT.PUBLIC_SUBKEY:
 				case consts.PKT.USER_ID:
 				case consts.PKT.ATTRIBUTE:
-					lastSubkeyId = lastIdentityId = lastAttributeId = null;
+					cleanups.unshift(cleanEmptySubkey, cleanEmptyIdentity, cleanEmptyAttribute);
 			}
 
-			packetContent.getPacketInfo(tag, body, function(err, info) {
+			async.series(cleanups, function(err) {
 				if(err)
-					return add(null, { type: tag }, new Error("Errorneous packet."), next);
+					return callback(err);
 
-				switch(tag) {
-					case consts.PKT.PUBLIC_KEY:
-						lastKeyImported = { type: tag, id: info.id, signatures: [ ], subkeys: [ ], identities: [ ], attributes: [ ] };
-						t.addKey(info, function(err) {
-							lastKeyId = add(imported.keys, lastKeyImported, err, next);
-						});
-						break;
-					case consts.PKT.PUBLIC_SUBKEY:
-						lastSubkeyImported = { type: tag, id: info.id, signatures: [ ] };
+				packetContent.getPacketInfo(tag, body, function(err, info) {
+					if(err)
+						return addError({ type: tag }, new Error("Errorneous packet."), next);
 
-						if(lastKeyId == null)
-							lastSubkeyId = add(null, lastSubkeyImported, new Error("Subkey without key."), next);
-						else
-						{
-							t.addSubkey(lastKeyId, info, function(err) {
-								lastSubkeyId = add(lastKeyImported.subkeys, lastSubkeyImported, err, next);
+					switch(tag) {
+						case consts.PKT.PUBLIC_KEY:
+							lastKeyImported = { type: tag, id: info.id, signatures: [ ], subkeys: [ ], identities: [ ], attributes: [ ] };
+							t.addKey(info, function(err) {
+								if(err)
+									addError(lastKeyImported, err, next);
+								else {
+									lastKeyId = info.id;
+									next();
+								}
 							});
-						}
+							break;
+						case consts.PKT.PUBLIC_SUBKEY:
+							lastSubkeyImported = { type: tag, id: info.id, signatures: [ ] };
 
-						break;
-					case consts.PKT.USER_ID:
-						lastIdentityImported = { type: tag, id: info.id, signatures: [ ] };
+							if(lastKeyId == null)
+								addError(lastSubkeyImported, new Error("Subkey without key."), next);
+							else
+							{
+								t.addSubkey(lastKeyId, info, function(err) {
+									if(err)
+										addError(lastSubkeyImported, err, next);
+									else {
+										lastSubkeyId = info.id;
+										next();
+									}
+								});
+							}
 
-						if(lastKeyId == null)
-							lastIdentityId = add(null, lastIdentityImported, new Error("Identity without key."), next);
-						else
-						{
-							t.addIdentity(lastKeyId, info, function(err) {
-								lastIdentityId = add(lastKeyImported.identities, lastIdentityImported, err, next);
-							});
-						}
+							break;
+						case consts.PKT.USER_ID:
+							lastIdentityImported = { type: tag, id: info.id, signatures: [ ] };
 
-						break;
-					case consts.PKT.ATTRIBUTE:
-						lastAttributeImported = { type: tag, id: info.id, signatures: [ ] };
+							if(lastKeyId == null)
+								addError(lastIdentityImported, new Error("Identity without key."), next);
+							else
+							{
+								t.addIdentity(lastKeyId, info, function(err) {
+									if(err)
+										addError(lastIdentityImported, err, next);
+									else {
+										lastIdentityId = info.id;
+										next();
+									}
+								});
+							}
 
-						if(lastKeyId == null)
-							lastAttributeId = add(null, lastAttributeImported, new Error("Attribute without key."), next);
-						else
-						{
-							t.addAttribute(lastKeyId, info, function(err) {
-								lastAttributeId = add(lastKeyImported.attributes, lastAttributeImported, err, next);
-							});
-						}
+							break;
+						case consts.PKT.ATTRIBUTE:
+							lastAttributeImported = { type: tag, id: info.id, signatures: [ ] };
 
-						break;
-					case consts.PKT.SIGNATURE:
-						var lastSignatureImported = { type: tag, id: info.id, issuer: info.issuer, date: info.date, sigtype: info.sigtype };
+							if(lastKeyId == null)
+								addError(lastAttributeImported, new Error("Attribute without key."), next);
+							else
+							{
+								t.addAttribute(lastKeyId, info, function(err) {
+									if(err)
+										addError(lastAttributeImported, err, next);
+									else {
+										lastAttributeId = info.id;
+										next();
+									}
+								});
+							}
 
-						if(!acceptLocal && !info.exportable)
-							add(null, lastSignatureImported, new Error("Signature is not exportable."), next);
-						else if(lastSubkeyId != null)
-						{
-							t.addSubkeySignature(lastKeyId, lastSubkeyId, info, function(err) {
-								add(lastSubkeyImported.signatures, lastSignatureImported, err, next);
-							});
-						}
-						else if(lastIdentityId != null)
-						{
-							t.addIdentitySignature(lastKeyId, lastIdentityId, info, function(err) {
-								add(lastIdentityImported.signatures, lastSignatureImported, err, next);
-							});
-						}
-						else if(lastAttributeId != null)
-						{
-							t.addAttributeSignature(lastKeyId, lastAttributeId, info, function(err) {
-								add(lastAttributeImported.signatures, lastSignatureImported, err, next);
-							});
-						}
-						else if(lastKeyId != null)
-						{
-							t.addKeySignature(lastKeyId, info, function(err) {
-								add(lastKeyImported.signatures, lastSignatureImported, err, next);
-							});
-						}
-						else
-							add(null, lastSignatureImported, new Error("Signature without object."), next);
+							break;
+						case consts.PKT.SIGNATURE:
+							var lastSignatureImported = { type: tag, id: info.id, issuer: info.issuer, date: info.date, sigtype: info.sigtype };
 
-						break;
-					default:
-						add(null, { type: tag }, new Error("Unknown packet type."), next);
-						break;
-				}
-			});
+							if(!acceptLocal && !info.exportable)
+								addError(lastSignatureImported, new Error("Signature is not exportable."), next);
+							else if(lastSubkeyId != null)
+							{
+								t.addSubkeySignature(lastKeyId, lastSubkeyId, info, function(err) {
+									if(err)
+										addError(lastSignatureImported, err, next);
+									else
+										add(lastSubkeyImported.signatures, lastSignatureImported, next);
+								});
+							}
+							else if(lastIdentityId != null)
+							{
+								t.addIdentitySignature(lastKeyId, lastIdentityId, info, function(err) {
+									if(err)
+										addError(lastSignatureImported, err, next);
+									else
+										add(lastIdentityImported.signatures, lastSignatureImported, next);
+								});
+							}
+							else if(lastAttributeId != null)
+							{
+								t.addAttributeSignature(lastKeyId, lastAttributeId, info, function(err) {
+									if(err)
+										addError(lastSignatureImported, err, next);
+									else
+										add(lastAttributeImported.signatures, lastSignatureImported, next);
+								});
+							}
+							else if(lastKeyId != null)
+							{
+								t.addKeySignature(lastKeyId, info, function(err) {
+									if(err)
+										addError(lastSignatureImported, err, next);
+									else
+										add(lastKeyImported.signatures, lastSignatureImported, next);
+								});
+							}
+							else
+								addError(lastSignatureImported, new Error("Signature without object."), next);
+
+							break;
+						default:
+							addError({ type: tag }, new Error("Unknown packet type."), next);
+							break;
+					}
+				});
+			}.bind(this));
 		}, function(err) {
 			if(err)
 				callback(err);
 			else
-				callback(null, imported);
+			{
+				async.series([ cleanEmptySubkey, cleanEmptyIdentity, cleanEmptyAttribute, cleanEmptyKey ], function(err) {
+					if(err)
+						callback(err);
+					else
+						callback(null, imported);
+				});
+			}
 		});
 	},
 
@@ -1523,5 +1651,15 @@ function _newestSignature(signatureFifo, callback) {
 		next();
 	}, function(err) {
 		callback(err, newest);
+	});
+}
+
+function _listEmpty(list, callback) {
+	list.forEachSeries(function() {
+		callback(null, false);
+	}, function(err) {
+		if(err)
+			return callback(err);
+		callback(null, true);
 	});
 }

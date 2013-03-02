@@ -37,6 +37,13 @@ exports.cdauth = function(test) {
 
 exports.cdauth.testKeyring = function(test, keyring, callback) {
 	async.series([
+		function(next) { // Import key F76ADFE9 (Candid Dauth old) without self-signatures
+			keyring.importKeys(fs.createReadStream(__dirname+"/cdauth_old_no_selfsigs.pgp"), function(err, imported) {
+				test.ifError(err);
+				test.equals(Object.keys(imported.keys).length, 0);
+				next();
+			});
+		},
 		function(next) { // Import key F76ADFE9 (Candid Dauth old)
 			keyring.importKeys(fs.createReadStream(__dirname+"/cdauth_old.pgp"), function(err, imported) {
 				test.ifError(err);
@@ -306,5 +313,5 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 		}
 	], callback);
 
-	return 169;
+	return 171;
 };
