@@ -178,20 +178,25 @@ BufferedStream.prototype = {
 	 * @return {BufferedStream} A new BufferedStream
 	 */
 	concat : function(otherStream) {
-		var ret = new BufferedStream();
-		async.forEachSeries([ this ].concat(utils.toProperArray(arguments)), function(it, next) {
-			if(!it instanceof BufferedStream)
-				it = new BufferedStream(it);
-
-			it.whilst(function(data, next) {
-				ret._sendData(data);
-				next();
-			}, next);
-		}, function(err) {
-			ret._endData(err);
-		});
-		return ret;
+		return concat([ this ].concat(utils.toProperArray(arguments)));
 	}
 };
 
+function concat(streams) {
+	var ret = new BufferedStream();
+	async.forEachSeries(streams, function(it, next) {
+		if(!it instanceof BufferedStream)
+			it = new BufferedStream(it);
+
+		it.whilst(function(data, next) {
+			ret._sendData(data);
+			next();
+		}, next);
+	}, function(err) {
+		ret._endData(err);
+	});
+	return ret;
+}
+
 module.exports = BufferedStream;
+module.exports.concat = concat;
