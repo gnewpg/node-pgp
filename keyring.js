@@ -844,7 +844,7 @@ Keyring.prototype = {
 
 			if(keyInfo.primary_identity != null)
 			{
-				this.getIdentity(keyId, keyInfo.primary_identity, p(this, function(err, identityInfo) {
+				this.getSelfSignedIdentity(keyId, keyInfo.primary_identity, p(this, function(err, identityInfo) {
 					if(err)
 						return callback(err);
 					else if(identityInfo == null)
@@ -858,7 +858,7 @@ Keyring.prototype = {
 
 			function findOther() {
 				// TODO: Read only one
-				this.getIdentities(keyId, null, fields).forEachSeries(p(this, function(identityInfo, next) {
+				this.getSelfSignedIdentities(keyId, null, fields).forEachSeries(p(this, function(identityInfo, next) {
 					callback(null, identityInfo);
 				}), function(err) {
 					callback(err, null);
