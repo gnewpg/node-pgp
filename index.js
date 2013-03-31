@@ -11,5 +11,5 @@ module.exports = {
 	utils : require("./utils"),
 	encryption : require("./encryption"),
 	Keyring : require("./keyring"),
-	keyringFile : require("./keyringFile")
+	keyringFile : require("./keyring/file")
 };

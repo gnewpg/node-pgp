@@ -1,10 +1,10 @@
 var util = require("util");
-var Keyring = require("./keyring");
-var Fifo = require("./fifo");
+var Keyring = require("../keyring");
+var Fifo = require("../fifo");
 var fs = require("fs");
-var BufferedStream = require("./bufferedStream");
-var consts = require("./consts");
-var utils = require("./utils");
+var BufferedStream = require("../bufferedStream");
+var consts = require("../consts");
+var utils = require("../utils");
 var async = require("async");
 
 function getStreamKeyring(stream, callback) {

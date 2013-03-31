@@ -1,5 +1,5 @@
 var util = require("util");
-var consts = require("./consts");
+var consts = require("../consts");
 
 
 var Filter = function() { };
