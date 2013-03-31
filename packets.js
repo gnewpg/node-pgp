@@ -177,7 +177,7 @@ function splitPackets(data) {
 											{
 												header = generateHeader(tag, body.length, newFormat);
 												ret._add(tag, header, body);
-												process.nextTick(readPacket);
+												setImmediate(readPacket);
 											}
 										}
 									});
@@ -195,7 +195,7 @@ function splitPackets(data) {
 						else
 						{
 							ret._add(tag, generateHeader(tag, body.length, newFormat), body);
-							process.nextTick(readPacket);
+							setImmediate(readPacket);
 						}
 					});
 				}
@@ -207,7 +207,7 @@ function splitPackets(data) {
 						else
 						{
 							ret._add(tag, header, body);
-							process.nextTick(readPacket);
+							setImmediate(readPacket);
 						}
 					});
 				}

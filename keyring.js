@@ -517,13 +517,13 @@ Keyring.prototype = {
 
 		function add(addTo, infoObj, next) {
 			addTo.push(infoObj);
-			process.nextTick(next);
+			setImmediate(next);
 		}
 
 		function addError(infoObj, err, next) {
 			infoObj.err = err;
 			imported.failed.push(infoObj);
-			process.nextTick(next);
+			setImmediate(next);
 		}
 
 		var lastKeyId = null;

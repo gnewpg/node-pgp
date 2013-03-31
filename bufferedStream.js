@@ -79,19 +79,19 @@ BufferedStream.prototype = {
 
 	_sendData : function(data) {
 		this.__buffer = Buffer.concat([ this.__buffer, data ]);
-		process.nextTick(utils.proxy(this, this.__checkRead));
+		setImmediate(utils.proxy(this, this.__checkRead));
 	},
 
 	_sendDataAtStart : function(data) {
 		this.__buffer = Buffer.concat([ data, this.__buffer ]);
-		process.nextTick(utils.proxy(this, this.__checkRead));
+		setImmediate(utils.proxy(this, this.__checkRead));
 	},
 
 	_endData : function(error) {
 		this.__ended = true;
 		this.__endError = error;
 
-		process.nextTick(utils.proxy(this, this.__checkRead));
+		setImmediate(utils.proxy(this, this.__checkRead));
 	},
 
 	/**
@@ -108,7 +108,7 @@ BufferedStream.prototype = {
 	*/
 	read : function(bytes, callback, strict) {
 		this.__wantToRead.push({ bytes: bytes, callback: callback, strict: (strict === undefined || strict === null ? true : strict) });
-		process.nextTick(utils.proxy(this, this.__checkRead));
+		setImmediate(utils.proxy(this, this.__checkRead));
 	},
 
 	/**
