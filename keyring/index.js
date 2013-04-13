@@ -404,6 +404,13 @@ Keyring.prototype = {
 		callback(new Error("Not implemented."));
 	},
 
+	/**
+	 * Closes all handles and connections that were opened for this keyring. The keyring object
+	 * is not usable afterwards.
+	 */
+	done : function() {
+	},
+
 	importKeys : function(keyData, callback, acceptLocal) {
 		throw new Error("Implemented in keyring/importExport.js");
 	},
