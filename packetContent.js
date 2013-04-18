@@ -155,7 +155,9 @@ function getIdentityPacketInfo(body, callback)
 		email : email,
 		comment : comment,
 		binary : body,
-		id : content
+		id : content,
+		nameTrust : 0,
+		emailTrust : 0
 	});
 }
 
@@ -165,7 +167,8 @@ function getAttributePacketInfo(body, callback)
 		pkt : consts.PKT.ATTRIBUTE,
 		id : utils.hash(body, "sha1", "base64").substring(0, 27),
 		subPackets : [ ],
-		binary : body
+		binary : body,
+		trust : 0
 	};
 
 	var stream = new BufferedStream(body);
@@ -228,7 +231,8 @@ function getSignaturePacketInfo(body, callback)
 		signature : null, // The signature as buffer object
 		hashalgoSecurity : null,
 		security : null,
-		verified : false
+		verified : false,
+		trustSignature : false
 	};
 
 	var byte1 = body.readUInt8(0);
@@ -288,6 +292,8 @@ function getSignaturePacketInfo(body, callback)
 					ret.exportable = false;
 				if(ret.hashedSubPackets[consts.SIGSUBPKT.SIG_EXPIRE] && ret.date)
 					ret.expires = new Date(ret.date.getTime() + (ret.hashedSubPackets[consts.SIGSUBPKT.SIG_EXPIRE][0].value*1000));
+				if(ret.hashedSubPackets[consts.SIGSUBPKT.TRUST] && ret.hashedSubPackets[consts.SIGSUBPKT.TRUST][0].value.level > 0 && ret.hashedSubPackets[consts.SIGSUBPKT.TRUST][0].value.amount > 0)
+					ret.trustSignature = true;
 
 				callback(null, ret);
 			});

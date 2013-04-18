@@ -120,6 +120,10 @@ Filter.KeyFlag = _valueFilter(function(subPackets, flag) {
 	return false;
 });
 
+Filter.ArrayContains = _valueFilter(function(array, contains) {
+	return array.indexOf(contains) != -1;
+});
+
 
 function _normaliseFilterValue(value) {
 	if(value instanceof Date)

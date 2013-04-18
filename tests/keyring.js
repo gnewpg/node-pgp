@@ -6,6 +6,8 @@ var ID_CDAUTH = "299C33F4F76ADFE9";
 var ID_CDAUTH_NEW = "9C22F455A0CD27E9";
 var ID_TDAUTH = "B183D07CBD57A7B3";
 var ID_V3 = "FFD1B4AC7C19FD19";
+var ID_GSWOT = "6BCB9B4B8875FB7F";
+var ID_STEPHEN = "D11C2911CE519CDE";
 
 exports.nonexistantKeyring = function(test) {
 	test.expect(2);
@@ -310,8 +312,81 @@ exports.cdauth.testKeyring = function(test, keyring, callback) {
 				test.equals(keyInfo.id, "19A29C7A53A0B130");
 				next();
 			}, [ "id" ]);
+		},
+
+		///////////
+		// TRUST //
+		///////////
+
+		function(next) { // Trust cdauth key
+			keyring.trustKey(ID_CDAUTH_NEW, function(err) {
+				test.ifError(err);
+				next();
+			});
+		},
+		function(next) { // Test that cdauth’s identities are trusted
+			keyring.getIdentityList(ID_CDAUTH_NEW, { nameTrust: 1, emailTrust: 1 }).toArraySingle(function(err, identities) {
+				test.ifError(err);
+				test.equals(identities.length, 4);
+				next();
+			});
+		},
+		function(next) { // Test that tdauth’s identities are not trusted
+			keyring.getIdentityList(ID_TDAUTH, { nameTrust: 0, emailTrust: 0 }).toArraySingle(function(err, identities) {
+				test.ifError(err);
+				test.equals(identities.length, 3);
+				next();
+			});
+		},
+		function(next) { // Import GSWOT key, which is tsigned by CDAUTH_NEW
+			keyring.importKeys(fs.createReadStream(__dirname+"/gswot.pgp"), function(err, imported) {
+				test.ifError(err);
+				test.equals(imported.keys.length, 3);
+				next();
+			});
+		},
+		function(next) { // Check that Stephens identities are trusted (because they are signed by GSWOT and Kenneth
+			keyring.getIdentityList(ID_STEPHEN, { nameTrust: new pgp.Keyring.Filter.GreaterThanOrEqual(1), emailTrust: new pgp.Keyring.Filter.GreaterThanOrEqual(1) }).toArraySingle(function(err, identities) {
+				test.ifError(err);
+				test.equals(identities.length, 5);
+				next();
+			});
+		},
+		function(next) { // Check that Stephens attribute is trusted (because it is signed by Kenneth, who is trusted by GSWOT
+			keyring.getAttributeList(ID_STEPHEN, { trust: new pgp.Keyring.Filter.GreaterThanOrEqual(1) }).toArraySingle(function(err, attributes) {
+				test.ifError(err);
+				test.equals(attributes.length, 1);
+				next();
+			});
+		},
+		function(next) { // Untrust CDAUTH
+			keyring.untrustKey(ID_CDAUTH_NEW, function(err) {
+				test.ifError(err);
+				next();
+			});
+		},
+		function(next) { // Check that CDAUTH’s identities are not trusted anymore
+			keyring.getIdentityList(ID_CDAUTH_NEW, { nameTrust: 0, emailTrust: 0 }).toArraySingle(function(err, identities) {
+				test.ifError(err);
+				test.equals(identities.length, 4);
+				next();
+			});
+		},
+		function(next) { // Check that Stephens identities are not trusted anymore
+			keyring.getIdentityList(ID_STEPHEN, { nameTrust: 0, emailTrust: 0 }).toArraySingle(function(err, identities) {
+				test.ifError(err);
+				test.equals(identities.length, 5);
+				next();
+			});
+		},
+		function(next) { // Check that Stephens attribute is not trusted anymore
+			keyring.getAttributeList(ID_STEPHEN, { trust: 0 }).toArraySingle(function(err, attributes) {
+				test.ifError(err);
+				test.equals(attributes.length, 1);
+				next();
+			});
 		}
 	], callback);
 
-	return 171;
+	return 189;
 };

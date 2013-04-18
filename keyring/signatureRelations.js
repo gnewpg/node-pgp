@@ -59,6 +59,13 @@ var async = require("async");
  *        mark it as non-sensitive.
  * 8. Make sure that the security level of a key is inherited to the signatures it makes.
  *     a) A signature is verified. Set its security level to the lowest among its own and that of the key.
+ * 9. Calculate the trust of keys, identities and attributes. TODO: Handle signature expiration and revocation
+ *     a) A certification signature is verified, revoked or removed. Recalculate the trust of the signed
+ *        identity or attribute.
+ *     b) A key or certification signature is verified, revoked or removed that contains a trust amount.
+ *        Recalculate the owner trust of the signed key.
+ *     c) The owner trust of a key changes. Apply the effects of this on all the keys, identities and
+ *        attributes that have been signed by the key.
 */
 
 utils.extend(Keyring.prototype, {
@@ -98,6 +105,10 @@ utils.extend(Keyring.prototype, {
 				checks.push(this.__checkSelfSignatures.bind(this, keyId));
 		}
 
+		// Check 9b
+		if([ consts.SIG.KEY, consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ].indexOf(signatureInfo.sigtype) != -1 && signatureInfo.trustSignature)
+			checks.push(remove ? this.__removeOwnerTrustSignature.bind(this, signatureInfo.id) : this.__addOwnerTrustSignature.bind(this, keyId, signatureInfo));
+
 		async.series(checks, callback);
 	},
 
@@ -125,6 +136,10 @@ utils.extend(Keyring.prototype, {
 	__identitySignatureVerified : function(keyId, identityId, signatureInfo, callback) {
 		var checks = [ this.__keySignatureVerified.bind(this, keyId, signatureInfo) ];
 
+		// Check 9a
+		if([ consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ].indexOf(signatureInfo.sigtype) != -1)
+			checks.push(this.__updateIdentityTrust.bind(this, keyId, identityId));
+
 		async.series(checks, callback);
 	},
 
@@ -134,6 +149,10 @@ utils.extend(Keyring.prototype, {
 
 	__attributeSignatureVerified : function(keyId, attributeId, signatureInfo, callback) {
 		var checks = [ this.__keySignatureVerified.bind(this, keyId, signatureInfo) ];
+
+		// Check 9a
+		if([ consts.SIG.CERT_0, consts.SIG.CERT_2, consts.SIG.CERT_3 ].indexOf(signatureInfo.sigtype) != -1)
+			checks.push(this.__updateAttributeTrust.bind(this, keyId, attributeId));
 
 		async.series(checks, callback);
 	},
@@ -541,5 +560,4 @@ utils.extend(Keyring.prototype, {
 			}.bind(this));
 		}.bind(this), [ "date" ]);
 	}
-
 });

@@ -290,6 +290,60 @@ utils.extend(_KeyringStream.prototype, {
 		this._subkeySignatures = { };
 		this._identitySignatures = { };
 		this._attributeSignatures = { };
+		this._ownerTrust = { };
+	},
+
+	_getOwnerTrustInfo : function(keyId, filter, fields) {
+		return Keyring._filter(new Fifo.fromArraySingle(this._ownerTrust[keyId] || [ ]), filter).map(function(it, next) {
+			next(null, Keyring._strip(it, fields));
+		});
+	},
+
+	_addOwnerTrustInfo : function(keyId, trustInfo, callback) {
+		if(!this._ownerTrust[keyId])
+			this._ownerTrust[keyId] = [ ];
+		this._ownerTrust[keyId].push(trustInfo);
+		callback(null);
+	},
+
+	_removeOwnerTrustBySignature : function(signatureId) {
+		var ret = [ ];
+		for(var i in this._ownerTrust) {
+			for(var j=0; j<this._ownerTrust[i].length; j++) {
+				if(this._ownerTrust[i][j].signaturePath.indexOf(signatureId) != -1) {
+					ret.push(utils.extend({ key: i }, this._ownerTrust[i][j]));
+					this._ownerTrust[i] = this._ownerTrust[i].slice(0, j).concat(this._ownerTrust[i].slice(j+1));
+					j--;
+				}
+			}
+		}
+		return Fifo.fromArraySingle(ret);
+	},
+
+	_removeKeyTrust : function(keyId) {
+		if(!this._ownerTrust[keyId])
+			return Fifo.fromArraySingle([ ]);
+
+		for(var i=0; i<this._ownerTrust[keyId].length; i++) {
+			if(this._ownerTrust[keyId][i].signaturePath.length == 0) {
+				this._ownerTrust[keyId] = this._ownerTrust[keyId].slice(0, i).concat(this._ownerTrust[keyId].slice(i+1));
+				i--;
+			}
+		}
+
+		var ret = [ ];
+
+		for(var i in this._ownerTrust) {
+			for(var j=0; j<this._ownerTrust[i].length; j++) {
+				if(this._ownerTrust[i][j].keyPath[0] == keyId) {
+					ret.push(utils.extend({ key: i }, this._ownerTrust[i][j]));
+					this._ownerTrust[i] = this._ownerTrust[i].slice(0, j).concat(this._ownerTrust[i].slice(j+1));
+					j--;
+				}
+			}
+		}
+
+		return Fifo.fromArraySingle(ret);
 	}
 });
 

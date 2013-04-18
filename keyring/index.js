@@ -396,6 +396,14 @@ Keyring.prototype = {
 		callback(new Error("Not implemented."));
 	},
 
+	getAllSignatures : function(keyId, filter, fields) {
+		return Fifo.fromArraySingle([
+			this.getKeySignatures(keyId, filter, fields),
+			this.getIdentityList(keyId).map(function(identityId, next) { next(null, this.getIdentitySignatures(keyId, identityId, filter, fields));}.bind(this)),
+			this.getAttributeList(keyId).map(function(attributeId, next) { next(null, this.getAttributeSignatures(keyId, attributeId, filter, fields));}.bind(this))
+		]).recursive();
+	},
+
 	saveChanges : function(callback) {
 		callback(new Error("Not implemented."));
 	},
@@ -458,6 +466,42 @@ Keyring.prototype = {
 
 	searchByFingerprint : function(keyId) {
 		throw new Error("Implemented in keyring/combine.js");
+	},
+
+	/**
+	 * Trust all signatures and trust signatures issued by the given key.
+	 */
+	trustKey : function(keyId, callback) {
+		throw new Error("Implemented in keyring/trust.js");
+	},
+
+	untrustKey : function(keyId, callback) {
+		throw new Error("Implemented in keyring/trust.js");
+	},
+
+	_getOwnerTrustInfo : function(keyId, filter, fields) {
+		return __getNotImplementedFifo();
+	},
+
+	_addOwnerTrustInfo : function(keyId, trustInfo, callback) {
+		callback(new Error("Not implemented."));
+	},
+
+	/**
+	 * Removes all owner trust records that contain the given signature in their signature chain.
+	 * Returns those records.
+	 */
+	_removeOwnerTrustBySignature : function(signatureId) {
+		return __getNotImplementedFifo();
+	},
+
+	/**
+	 * Removes the initial key trust records for that key (that is, a trust record with an empty signature
+	 * path). Also removes all trust records that have that key at the start of their key path and returns
+	 * them.
+	 */
+	_removeKeyTrust : function(keyId) {
+		return __getNotImplementedFifo();
 	}
 };
 
@@ -524,3 +568,4 @@ require("./search");
 require("./importExport");
 require("./combine");
 require("./signatureRelations");
+require("./trust");
