@@ -324,14 +324,15 @@ utils.extend(_KeyringStream.prototype, {
 		if(!this._ownerTrust[keyId])
 			return Fifo.fromArraySingle([ ]);
 
+		var ret = [ ];
+
 		for(var i=0; i<this._ownerTrust[keyId].length; i++) {
 			if(this._ownerTrust[keyId][i].signaturePath.length == 0) {
+				ret.push(utils.extend({ key: keyId }, this._ownerTrust[keyId][i]));
 				this._ownerTrust[keyId] = this._ownerTrust[keyId].slice(0, i).concat(this._ownerTrust[keyId].slice(i+1));
 				i--;
 			}
 		}
-
-		var ret = [ ];
 
 		for(var i in this._ownerTrust) {
 			for(var j=0; j<this._ownerTrust[i].length; j++) {

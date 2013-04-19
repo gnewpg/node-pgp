@@ -496,9 +496,9 @@ Keyring.prototype = {
 	},
 
 	/**
-	 * Removes the initial key trust records for that key (that is, a trust record with an empty signature
-	 * path). Also removes all trust records that have that key at the start of their key path and returns
-	 * them.
+	 * Removes the initial key trust records for that key (that is, a trust record with an empty key
+	 * path) and all trust records that have that key at the start of their key path. Returns
+	 * the deleted records.
 	 */
 	_removeKeyTrust : function(keyId) {
 		return __getNotImplementedFifo();

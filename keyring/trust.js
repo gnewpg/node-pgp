@@ -124,7 +124,7 @@ utils.extend(Keyring.prototype, {
 							return next(err);
 
 						this.__addSignatureToTrustPath(signatureRecord.keyId, trustInfo, signatureInfo, next);
-					}.bind(this), [ "hashedSubPackets" ]);
+					}.bind(this), [ "id", "issuer", "hashedSubPackets" ]);
 				}.bind(this), callback);
 			}.bind(this));
 		}.bind(this));
