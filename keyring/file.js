@@ -256,24 +256,24 @@ utils.extend(_KeyringStream.prototype, {
 	getSignatureById : function(signatureId, callback, fields) {
 		for(var keyId in this._keys)
 		{
-			if(this._keySignatures[keyId] && this._keySignatures[keyId][signatureId])
+			if(this._keySignatures[keyId] && this._keySignatures[keyId][signatureId] && this._keySignatures[keyId][signatureId].verified)
 				return callback(null, utils.extend(Keyring._strip(this._keySignatures[keyId][signatureId], fields), { key: keyId }));
 
 			for(var subkeyId in this._subkeySignatures[keyId] || { })
 			{
-				if(this._subkeySignatures[keyId][subkeyId][signatureId])
+				if(this._subkeySignatures[keyId][subkeyId][signatureId] && this._subkeySignatures[keyId][subkeyId][signatureId].verified)
 					return callback(null, utils.extend(Keyring._strip(this._subkeySignatures[keyId][subkeyId][signatureId], fields), { key: keyId, subkey: subkeyId }));
 			}
 
 			for(var identityId in this._identitySignatures[keyId] || { })
 			{
-				if(this._identitySignatures[keyId][identityId][signatureId])
+				if(this._identitySignatures[keyId][identityId][signatureId] && this._identitySignatures[keyId][identityId][signatureId].verified)
 					return callback(null, utils.extend(Keyring._strip(this._identitySignatures[keyId][identityId][signatureId], fields), { key: keyId, identity: identityId }));
 			}
 
 			for(var attributeId in this._attributeSignatures[keyId] || { })
 			{
-				if(this._attributeSignatures[keyId][attributeId][signatureId])
+				if(this._attributeSignatures[keyId][attributeId][signatureId] && this._attributeSignatures[keyId][attributeId][signatureId].verified)
 					return callback(null, utils.extend(Keyring._strip(this._attributeSignatures[keyId][attributeId][signatureId], fields), { key: keyId, attribute: attributeId }));
 			}
 		}
