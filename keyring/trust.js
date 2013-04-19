@@ -45,7 +45,15 @@ var consts = require("../consts");
 
 utils.extend(Keyring.prototype, {
 	trustKey : function(keyId, callback) {
-		this.__addOwnerTrustInfo(keyId, { keyPath: [ ], signaturePath: [ ], regexp: [ ], amount: 1, level: 255 }, callback);
+		this._getOwnerTrustInfo(keyId, { keyPath: new Keyring.Filter.Equals([ ]) }, [ ]).forEachSeries(function(it, next) {
+			// Is already trusted
+			callback(null);
+		}, function(err) {
+			if(err)
+				return callback(err);
+
+			this.__addOwnerTrustInfo(keyId, { keyPath: [ ], signaturePath: [ ], regexp: [ ], amount: 1, level: 255 }, callback);
+		}.bind(this));
 	},
 
 	untrustKey : function(keyId, callback) {
