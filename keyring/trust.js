@@ -113,7 +113,7 @@ utils.extend(Keyring.prototype, {
 				if(trustInfo.level == 0)
 					return callback();
 
-				var trustSigFilter = { verified: true, revoked: null, expired: new Keyring.Filter.Not(new Keyring.Filter.LessThan(new Date())), sigtype: [ consts.SIG.KEY, consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] };
+				var trustSigFilter = { verified: true, trustSignature: true, revoked: null, expired: new Keyring.Filter.Not(new Keyring.Filter.LessThan(new Date())), sigtype: [ consts.SIG.KEY, consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] };
 				this.getKeySignatureListByIssuer(keyId, trustSigFilter).concat(this.getIdentitySignatureListByIssuer(keyId, trustSigFilter), this.getAttributeSignatureListByIssuer(keyId, trustSigFilter)).forEachSeries(function(signatureRecord, next) {
 					// Avoid recursive trust chains
 					if(signatureRecord.keyId == keyId || trustInfo.keyPath.indexOf(signatureRecord.keyId) != -1)
