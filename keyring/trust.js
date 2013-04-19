@@ -34,7 +34,9 @@ var consts = require("../consts");
  * this is what happens:
  * - Only owner-trust records are considered where all regexps match the signed identity (or, in case of
  *   an attribute, where there are no regexps)
- * - For each signature issuer, the owner-trust record with the highest trust amount counts
+ * - For each signature issuer, the owner-trust record with the highest trust amount counts. Actually,
+ *   the owner-trust ^ 1.5 is used, because this makes it necessary to get three signatures from a partially-trusted
+ *   key in order to be fully trusted.
  * - The trust on the name of an identity and on an attribute will be the sum of the owner trust amounts of
  *   all the keys that have signed it with CERT_0, CERT_2 or CERT_3, only counting one signature for each issuer
  * - The trust on the e-mail adrress of an identity will be the sum of the owner trust amounts of all the keys
@@ -216,9 +218,12 @@ utils.extend(Keyring.prototype, {
 
 			var update = { nameTrust : 0, emailTrust : 0 };
 			for(var i in trustName)
-				update.nameTrust += trustName[i];
+				update.nameTrust += Math.pow(trustName[i], 1.5);
 			for(var i in trustEmail)
-				update.emailTrust += trustEmail[i];
+				update.emailTrust += Math.pow(trustEmail[i], 1.5);
+
+			update.nameTrust = Math.round(update.nameTrust*100)/100;
+			update.emailTrust = Math.round(update.emailTrust*100)/100;
 
 			this._updateIdentity(keyId, identityId, update, callback);
 		}.bind(this));
@@ -242,7 +247,8 @@ utils.extend(Keyring.prototype, {
 
 			var update = { trust : 0 };
 			for(var i in trust)
-				update.trust += trust[i];
+				update.trust += Math.pow(trust[i], 1.5);
+			update.trust = Math.round(update.trust*100)/100;
 
 			this._updateAttribute(keyId, attributeId, update, callback);
 		}.bind(this));
