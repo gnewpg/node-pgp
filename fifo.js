@@ -64,30 +64,50 @@ Fifo.prototype = {
 		this.__check();
 	},
 
-	forEachSeries : function(iterator, callback) {
+	forEachLimit : function(limit, iterator, callback) {
 		var t = this;
-		handleNextItem();
+		var running = 0;
+		var ended = false;
+		var endError = null;
 
-		function handleNextItem() {
+		function startOne() {
+			if(limit > 0 && running >= limit || ended)
+				return;
+
+			running++;
 			t.next(function(err) {
-				if(err === true)
-					callback(null);
-				else if(err)
-					callback(err);
-				else
-				{
-					var args = utils.toProperArray(arguments);
-					args.shift();
-					args.push(function(err) {
-						if(err)
-							callback(err);
-						else
-							setImmediate(handleNextItem);
-					});
-					iterator.apply(null, args);
-				}
-			});
+				if(err)
+					return finishOne(err);
+
+				var args = utils.toProperArray(arguments);
+				iterator.apply(null, args.slice(1).concat([ utils.callback(finishOne) ]));
+
+				setImmediate(startOne);
+			})
 		}
+
+		function finishOne(err) {
+			running--;
+			if(err && !ended) {
+				ended = true;
+				endError = (err === true ? null : err);
+			}
+
+			if(running == 0 && ended)
+				callback(endError);
+			else
+				setImmediate(startOne);
+		}
+
+		setImmediate(startOne);
+	},
+
+	forEachSeries : function(iterator, callback) {
+		this.forEachLimit(1, iterator, callback);
+	},
+
+	forEach : function(iterator, callback) {
+		this.forEachLimit(0, iterator, callback);
 	},
 
 	toArraySingle : function(callback) {
