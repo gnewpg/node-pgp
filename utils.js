@@ -55,10 +55,7 @@ function indexOf(buffer, charCode)
 }
 
 function toProperArray(arr) {
-	var ret = [ ];
-	for(var i=0; i<arr.length; i++)
-		ret.push(arr[i]);
-	return ret;
+	return Array.prototype.slice.call(arr);
 }
 
 function proxy(context, func) {
