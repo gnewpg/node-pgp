@@ -58,13 +58,13 @@ so that all file handles (or database connections) are closed.
 The hierarchy of objects is as follows:
 
 * Public key
-  * Signature
-  * Public subkey
-    * Signature
-  * Identity
-    * Signature
-  * Attribute
-    * Signature
+	* Signature
+	* Public subkey
+		* Signature
+	* Identity
+		* Signature
+	* Attribute
+		* Signature
 
 Each object is referenced by an ID that is unique within the context of its parent
 object. Keys and subkeys are referenced by their long ID, a 16-digit uppercase hexadecimal
