@@ -204,7 +204,7 @@ Keyring.prototype = {
 		var ret = new Fifo();
 		this.getKeyList().forEachSeries(p(this, function(keyId, next) {
 			this.getKeySignatureList(keyId, filter).forEachSeries(function(signatureId, next2) {
-				ret._add({ key: keyId, signature: signatureId });
+				ret._add({ keyId: keyId, signatureId: signatureId });
 				next2();
 			}, next);
 		}), p(ret, ret._end));
