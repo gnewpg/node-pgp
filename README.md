@@ -42,7 +42,7 @@ back to the file. There are other implementations, such as
 
 In order to create a keyring object from a file, use the following code:
 
-```node
+```javascript
 var filename = "/tmp/keyring.pgp";
 var create = true; // Create the file if it does not exist?
 pgp.keyringFile.getFileKeyring(filename, function(err, keyring) {
@@ -283,7 +283,7 @@ Reads the specified number of bytes from the stream. If `strict` is set to true
 the number of bytes is available. If it is set to false, in that case, it will
 returned a reduced number of bytes containing the rest of the stream.
 
-```node
+```javascript
 var stream; // Of type BufferedStream
 stream.read(5, function(err, data) {
 	if(err)
@@ -306,7 +306,7 @@ stream.read(5, function(err, data) {
 Waits until the stream has ended and then calls the callback function with the
 whole amount of data.
 
-```node
+```javascript
 var stream; // Of type BufferedStream
 stream.readUntilEnd(function(err, data) {
 	if(err)
@@ -320,7 +320,7 @@ stream.readUntilEnd(function(err, data) {
 
 Reads a line from the stream. The line-break is included in the provided data.
 
-```node
+```javascript
 var stream; // Of type BufferedStream
 stream.readLine(function(err, data) {
 	if(err)
@@ -338,7 +338,7 @@ Reads an arbitrary amount of data from the stream, at least 1 byte. All data
 that is currently available in the stream buffer will be passed to the callback
 function. This example passes all data from the stream to a writable stream.
 
-```node
+```javascript
 var stream; // Of type BufferedStream
 var writableStream;
 readOn();
@@ -363,7 +363,7 @@ the `iterator` function with an arbitrary amount of data multiple times until th
 end of the stream is reached. Then, the `callback` function is called once with
 a possible error message.
 
-```node
+```javascript
 var stream; // Of type BufferedStream
 stream.whilst(function(data, callback) {
 	// Do something with the data chunk, maybe something asynchronous
@@ -386,7 +386,7 @@ Objects of this type represent a queue of items.
 There are two ways to read the items. The probably simpler one works similar to
 the `forEachSeries()` method from the `async` library:
 
-```node
+```javascript
 var fifo; // Of type Fifo
 fifo.forEachSeries(function(item, callback) {
 	// Do something with item, maybe something asynchronous
@@ -402,7 +402,7 @@ fifo.forEachSeries(function(item, callback) {
 
 The other method reads each item manually by using the `next` function:
 
-```node
+```javascript
 var fifo; // Of type Fifo
 readNext();
 function readNext() {
@@ -428,7 +428,7 @@ Filter
 Filters are used to filter objects by their properties. To get all version 4 keys with either
 2048 or 4096 bits for example, use the following filter:
 
-```node
+```javascript
 { version: 4, size: [ 2048, 4096 ] }
 ```
 
@@ -453,7 +453,7 @@ There are different classes that you can use instead of specifying the values di
 
 For example, to look up all version 4 keys with a key size 2048 or greater, use the following filter:
 
-```node
+```javascript
 { version: 4, size: new pgp.Keyring.Filter.GreaterThanOrEqual(2048) }
 ```
 
@@ -713,7 +713,7 @@ detecting the format of the input data. `data` can be a Readable Stream, a
 Buffer, or a String. The function returns a [`BufferedStream`](#bufferedstream),
 see below how to work with that.
 
-```node
+```javascript
 pgp.formats.decodeKeyFormat(fs.createReadStream("/tmp/test.asc")).readUntilEnd(function(err, data) {
 if(err)
 		; // An error occurred
@@ -728,7 +728,7 @@ Converts the input data from armored ASCII to the binary format. `data` can be
 a Readable Stream, a Buffer, or a String. The function returns a
 [`BufferedStream`](#bufferedstream).
 
-```node
+```javascript
 pgp.formats.dearmor(fs.createReadStream("/tmp/test.asc")).readUntilEnd(function(err, data) {
 	if(err)
 		console.warn("An error occurred", err);
@@ -743,7 +743,7 @@ Converts the input data from binary format to armored ASCII format. `data` can
 be a Readable Stream, a Buffer, or a String. `messageType` is one of [`pgp.consts.ARMORED_MESSAGE`](#armored-message-type).
 The function returns a [`BufferedStream`](#bufferedstream).
 
-```node
+```javascript
 pgp.formats.enarmor(fs.createReadStream("/tmp/test.pgp"), pgp.consts.ARMORED_MESSAGE).readUntilEnd(function(err, data) {
 	if(err)
 		console.warn("An error occurred", err);
