@@ -134,7 +134,8 @@ utils.extend(Keyring.prototype, {
 	 */
 	getKeyWithFlag : function(keyId, flag, callback, fields) {
 		var id = null;
-		var filter = { issuer: keyId, verified: true, sigtype: [ consts.SIG.KEY, consts.SIG.SUBKEY, consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ], expires: new Filter.Not(new Filter.LessThanOrEqual(new Date())), revoked : null };
+		var filter = { issuer: keyId, verified: true, sigtype: [ consts.SIG.KEY, consts.SIG.SUBKEY, consts.SIG.CERT_0, consts.SIG.CERT_1, consts.SIG.CERT_2, consts.SIG.CERT_3 ] };
+		var now = new Date().getTime();
 
 		var isPkalgoRelatedFlag = ([ consts.KEYFLAG.SIGN, consts.KEYFLAG.ENCRYPT_COMM, consts.KEYFLAG.ENCRYPT_FILES, consts.KEYFLAG.AUTH ].indexOf(flag) != -1);
 		var sigDate = null;
@@ -145,12 +146,18 @@ utils.extend(Keyring.prototype, {
 				return next(); // pkalgo does not support this flag
 
 			sigDate = null;
-			supports = isPkalgoRelatedFlag; // For signing, encryption and authentication, default to true unless overridden by signature
-			this.getSubkeySignatures(keyId, subkeyInfo.id, filter, [ "date", "hashedSubPackets" ]).forEachSeries(function(signatureInfo, next) {
+			supports = isPkalgoRelatedFlag ? 2 : true; // For signing, encryption and authentication, default to true unless overridden by signature
+			this.getSubkeySignatures(keyId, subkeyInfo.id, filter, [ "date", "hashedSubPackets", "expires", "revoked" ]).forEachSeries(function(signatureInfo, next) {
 				if(signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_FLAGS] && (sigDate == null || signatureInfo.date.getTime() > sigDate))
 				{
-					supports = signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_FLAGS][0].value[flag];
-					sigDate = signatureInfo.date.getTime();
+					if(signatureInfo.expires && signatureInfo.expires.getTime() < now || signatureInfo.revoked) {
+						// An expired signature did specify the flag, so do not default to true anymore
+						if(supports === 2)
+							supports = false;
+					} else {
+						supports = signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_FLAGS][0].value[flag];
+						sigDate = signatureInfo.date.getTime();
+					}
 				}
 				next();
 			}, function(err) {
@@ -182,19 +189,25 @@ utils.extend(Keyring.prototype, {
 					return callback(null); // Pkalgo does not support flag
 
 				sigDate = null;
-				supports = isPkalgoRelatedFlag || flag == consts.KEYFLAG.CERT;
+				supports = (isPkalgoRelatedFlag || flag == consts.KEYFLAG.CERT) ? 2 : false;
 
 				var signatures = Fifo.fromArraySingle([
-					this.getKeySignatures(keyId, filter, [ "date", "hashedSubPackets" ]),
-					this.getIdentityList(keyId).map(function(identityId, next) { next(null, this.getIdentitySignatures(keyId, identityId, filter, [ "date", "hashedSubPackets" ])); }.bind(this)),
-					this.getAttributeList(keyId).map(function(attributeId, next) { next(null, this.getAttributeSignatures(keyId, attributeId, filter, [ "date", "hashedSubPackets" ])); }.bind(this))
+					this.getKeySignatures(keyId, filter, [ "date", "hashedSubPackets", "expires", "revoked" ]),
+					this.getIdentityList(keyId).map(function(identityId, next) { next(null, this.getIdentitySignatures(keyId, identityId, filter, [ "date", "hashedSubPackets", "expires", "revoked" ])); }.bind(this)),
+					this.getAttributeList(keyId).map(function(attributeId, next) { next(null, this.getAttributeSignatures(keyId, attributeId, filter, [ "date", "hashedSubPackets", "expires", "revoked" ])); }.bind(this))
 				]).recursive();
 
 				signatures.forEachSeries(function(signatureInfo, next) {
 					if(signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_FLAGS] && (sigDate == null || signatureInfo.date.getTime() > sigDate))
 					{
-						supports = signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_FLAGS][0].value[flag];
-						sigDate = signatureInfo.date.getTime();
+						if(signatureInfo.expires && signatureInfo.expires.getTime() < now || signatureInfo.revoked) {
+							// An expired signature did specify the flag, so do not default to true anymore
+							if(supports === 2)
+								supports = false;
+						} else {
+							supports = signatureInfo.hashedSubPackets[consts.SIGSUBPKT.KEY_FLAGS][0].value[flag];
+							sigDate = signatureInfo.date.getTime();
+						}
 					}
 					next();
 				}, function(err) {
