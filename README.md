@@ -4,106 +4,472 @@ JavaScript OpenPGP implementation following
 
 This page describes what is supported already.
 
-Functions
-=========
+API documentation
+=================
 
-PGP data
---------
+* [Keyring](#keyring)
+  * [Open a keyring file](#open-a-keyring-file)
+  * [Access keys and their sub-objects](#access-keys-and-their-sub-objects)
+  * [Add and remove objects](#add-and-remove-objects)
+  * [Save changes](#save-changes)
+  * [Web of trust](#web-of-trust)
+* [BufferedStream](#bufferedstream)
+* [Fifo](#fifo)
+* [Filter](#filter)
+* [Object info](#object-info)
+  * [Public key info](#public-key-info)
+  * [Public subkey info](#public-subkey-info)
+  * [User ID info](#user-id-info)
+  * [Attribute info](#attribute-info)
+  * [Signature info](#signature-info)
+* [Constants](#constants)
+* [Format conversion functions](#format-conversion-functions)
 
-OpenPGP data can come in two different formats: in binary or “ASCII-armored”
-using base-64. These methods allow working with the different formats.
 
-### formats.decodeKeyFormat(data) ###
+Types
+=====
 
-This method converts the input data to the binary format, automatically
-detecting the format of the input data. `data` can be a Readable Stream, a
-Buffer, or a String. The function returns a [`BufferedStream`](#bufferedstream),
-see below how to work with that.
+Keyring
+-------
 
-	pgp.formats.decodeKeyFormat(fs.createReadStream("/tmp/test.asc")).readUntilEnd(function(err, data) {
+The Keyring class represents a collection of keys and can be used to access
+information about them. node-pgp ships a simple implementation of a keyring
+class reading keys from a file, storing them in memory and saving changes
+back to the file. There are other implementations, such as
+[node-pgp-postgres](https://github.com/cdauth/node-pgp-postgres).
+
+### Open a keyring file ###
+
+In order to create a keyring object from a file, use the following code:
+
+```node
+var filename = "/tmp/keyring.pgp";
+var create = true; // Create the file if it does not exist?
+pgp.keyringFile.getFileKeyring(filename, function(err, keyring) {
+	// keyring is the Keyring object
+}, create);
+```
+
+When you are finished using a Keyring object, you should call `keyring.done()`,
+so that all file handles (or database connections) are closed.
+
+### Access keys and their sub-objects ###
+
+The hierarchy of objects is as follows:
+
+* Public key
+  * Signature
+  * Public subkey
+    * Signature
+  * Identity
+    * Signature
+  * Attribute
+    * Signature
+
+Each object is referenced by an ID that is unique within the context of its parent
+object. Keys and subkeys are referenced by their long ID, a 16-digit uppercase hexadecimal
+number. Identities are referenced by the string of their identity. Attributes and signatures
+are referenced by a 27-character alphanumeric checksum of their content.
+
+#### get*List() ####
+
+* `Keyring.getKeyList([filter])`
+* `Keyring.getKeySignatureList(keyId[, filter])`
+* `Keyring.getSubkeyList(keyId[, filter])`
+* `Keyring.getSubkeySignatureList(keyId, subkeyId[, filter])`
+* `Keyring.getIdentityList(keyId[, filter])`
+* `Keyring.getIdentitySignatureList(keyId, identityId[, filter])`
+* `Keyring.getAttributeList(keyId[, filter])`
+* `Keyring.getAttributeSignatureList(keyId, attributeId[, filter])`
+* `Keyring.getParentKeyList(subkeyId)`
+
+Returns a [Fifo](#fifo) object with the IDs of the existing objects, optionally filtered
+by a [Filter](#filter).
+
+#### get*s() ####
+
+* `Keyring.getKeys([filter, [fields]])`
+* `Keyring.getKeySignatures(keyId, [filter, [fields]])`
+* `Keyring.getSubkeys(keyId, [filter, [fields]])`
+* `Keyring.getSubkeySignatures(keyId, subkeyId, [filter, [fields]])`
+* `Keyring.getIdentities(keyId, [filter, [fields]])`
+* `Keyring.getIdentitySignatures(keyId, identityId, [filter, [fields]])`
+* `Keyring.getAttributes(keyId, [filter, [fields]])`
+* `Keyring.getAttributeSignatures(keyId, attributeId, [filter, [fields]])`
+* `Keyring.getParentKeys(subkeyId)`
+* `Keyring.getAllSignatures(keyId, filter, fields)`
+
+Returns a [Fifo](#fifo) object with the existing object [infos](#object-info), optionally
+only those that match the given [Filter](#filter). If a `fields` array is specified, the
+object info objects will only contain those properties. This might improve performance
+with some keyring implementations.
+
+`getAllSignatures()` returns all signatures of the key itself and of all its sub-objects.
+
+#### getSelfSigned*s() ####
+
+* `Keyring.getSelfSignedSubkeys(keyId[, filter[, fields]])`
+* `Keyring.getSelfSignedIdentities(keyId[, filter[, fields]])`
+* `Keyring.getSelfSignedAttributes(keyId[, filter[, fields]])`
+
+Same as above, but additionally returns these additional properties from the most recent
+self-signature: `expires`, `revoked`, `security`. Objects that do not contain a self-signature
+are not returned.
+
+#### *exists() ####
+
+* `Keyring.keyExists(keyId, callback)`
+* `Keyring.keySignatureExists(keyId, signatureId, callback)`
+* `Keyring.subkeyExists(keyId, subkeyId, callback)`
+* `Keyring.subkeySignatureExists(keyId, subkeyId, signatureId, callback)`
+* `Keyring.identityExists(keyId, identityId, callback)`
+* `Keyring.identitySignatureExists(keyId, identityId, signatureId, callback)`
+* `Keyring.attributeExists(keyId, attributeId, callback)`
+* `Keyring.attributeSignatureExists(keyId, attributeId, signatureId, callback)`
+
+Calls the `callback(err, exists)` function with a boolean to indicate whether an object with
+the given ID exists.
+
+#### get*() ####
+
+* `Keyring.getKey(keyId, callback[, fields])`
+* `Keyring.getKeySignature(keyId, signatureId, callback[, fields])`
+* `Keyring.getSubkey(keyId, subkeyId, callback[, fields])`
+* `Keyring.getSubkeySignature(keyId, subkeyId, signatureId, callback[, fields])`
+* `Keyring.getIdentity(keyId, identityId, callback[, fields])`
+* `Keyring.getIdentitySignature(keyId, identityId, signatureId, callback[, fields])`
+* `Keyring.getAttribute(keyId, attributeId, callback[, fields])`
+* `Keyring.getAttributeSignature(keyId, attributeId, signatureId, callback[, fields])`
+* `Keyring.getSignatureById(signatureId, callback[, fields])`
+* `Keyring.getPrimaryIdentity(keyId, callback[, fields])`
+
+Calls the `callback(err, objectInfo)` function with an [info object](#object-info) for
+the object with the specified ID. If the object does not exist, `null` is passed instead.
+By specifying the `fields` array, you can limit the properties that the info object will
+contain, which might increase performance with some keyring implementations.
+
+Note that `getSignatureById()` only returns verified signatures.
+
+`getPrimaryIdentity()` finds the primary identity of the key or null if the key does not
+contain any identities at all.
+
+#### getSelfSigned*() ####
+
+* `Keyring.getSelfSignedSubkey(keyId, subkeyId, callback[, fields])`
+* `Keyring.getSelfSignedIdentity(keyId, identityId, callback[, fields])`
+* `Keyring.getSelfSignedAttribute(keyId, attributeId, callback[, fields])`
+
+Same as above, but additionally returns these additional properties from the most recent
+self-signature: `expires`, `revoked`, `security`. Objects that do not contain a self-signature
+are not returned.
+
+#### get*SignatureListByIsser() ####
+
+* `Keyring.getKeySignatureListByIssuer(issuerKeyId[, filter])`
+* `Keyring.getSubkeySignatureListByIssuer(issuerKeyId[, filter])`
+* `Keyring.getIdentitySignatureListByIssuer(issuerKeyId[, filter])`
+* `Keyring.getAttributeSignatureListByIssuer(issuerKeyId[, filter])`
+
+Finds signatures allegedly issued by the given key, optionally only those that match the given
+[filter](#filter). To only get those signatures that have really been issued by the given key,
+use `{ verified: true }` as filter. Returns a [Fifo](#fifo) object.
+
+The objects returned contain the following properties, depending on the context: `keyId`,
+`signatureId`, `subkeyId`, `identityId`, `attributeId`.
+
+#### search() ####
+
+* `Keyring.search(searchString)`
+* `Keyring.searchIdentities(searchString)`
+* `Keyring.searchByShortKeyId(shortKeyId)`
+* `Keyring.searchByLongKeyId(longKeyId)`
+* `Keyring.searchByFingerprint(fingerprint)`
+
+Searches the keyring for the given strings. `search()` unites all other search methods.
+
+A [Fifo](#fifo) object is returned that contains [key info](#public-key-info) objects, optionally
+with an additional `subkey` or `identity` object containing the [info object](#object-info) of the
+matched subkey or identity.
+
+#### exportKey() ####
+
+* `Keyring.exportKey(keyId[, selection])`
+
+Exports the given key in binary format, returned as a [BufferedStream](#bufferedStream).
+With the `selection` object, you can skip sub-objects during the export. Its format is
+`{ identities: { }, attributes: { }, subkeys: { }, signatures: { } }`, where the properties
+are objects mapping object IDs to booleans that indicate whether the objects should be exported.
+If `selection.attributes` is undefined, all attributes are exported, if it is an empty object,
+no attributes are exported.
+
+### Add and remove objects ###
+
+Changes made to the keyring are not written to the underlying data storage (such as a file
+or a database) unless the save function is called.
+
+#### add*() ####
+
+* `Keyring.addKey(keyInfo, callback)`
+* `Keyring.addKeySignature(keyId, signatureInfo, callback)`
+* `Keyring.addSubkey(keyId, subkeyInfo, callback)`
+* `Keyring.addSubkeySignature(keyId, subkeyId, signatureInfo, callback)`
+* `Keyring.addIdentity(keyId, identityInfo, callback)`
+* `Keyring.addIdentitySignature(keyId, identityId, signatureInfo, callback)`
+* `Keyring.addAttribute(keyId, attributeInfo, callback)`
+* `Keyring.addAttributeSignature(keyId, attributeId, signatureInfo, callback)`
+
+Adds the object with the given [info](#object-info) to the keyring and then calls
+the `callback(err)` function.
+
+#### remove*() ####
+
+* `Keyring.removeKey(keyId, callback)`
+* `Keyring.removeKeySignature(keyId, signatureId, callback)`
+* `Keyring.removeSubkey(keyId, subkeyId, callback)`
+* `Keyring.removeSubkeySignature(keyId, subkeyId, signatureId, callback)`
+* `Keyring.removeIdentity(keyId, identityId, callback)`
+* `Keyring.removeIdentitySignature(keyId, identityId, signatureId, callback)`
+* `Keyring.removeAttribute(keyId, attributeId, callback)`
+* `Keyring.removeAttributeSignature(keyId, attributeId, signatureId, callback)`
+
+Removes the object with the given ID from the keyring and then calls the `callback(err)`
+function. If the item does not exist, an error *might* be raised.
+
+#### importKeys() ####
+
+* `Keyring.importKeys(keyData, callback[, acceptLocal])`
+
+Imports the given keys to the keyring. `keyData` is a [BufferedStream](#bufferedstream) with
+keys in binary format. After the import, `callback(err, imported)` is called, where `imported`
+is an object of the format `{ keys: [ ], failed: [ ] }`, `keys` containing an array of objects
+with some information about the imported keys and `failed` containing an array of objects with
+some information about the objects that failed to import.
+
+If `acceptLocal` is set to `true`, local signature are not skipped.
+
+### Save changes ###
+
+* `Keyring.saveChanges(callback)`
+* `Keyring.revertChanges(callback)`
+
+Saves or reverts the changes made to the keyring and then calls `callback(err)`.
+
+### Web of trust ###
+
+* `Keyring.trust(keyId, callback)`
+* `Keyring.untrustKey(keyId, callback)`
+
+Trusts/untrusts the given key ID and then calls `callback(err)`. If a key is trusted,
+all the signatures made by it will be trusted and so the identities and attributes that
+it has signed. Also, trust signatures made by it will be trusted, so a chain of trust can
+be built.
+
+
+BufferedStream
+--------------
+
+This class makes reading from a Readable Stream predictable by providing methods
+that ensure that a specified number of bytes is returned at once.
+
+Objects of this class are returned by several functions of this library. The
+following methods can be used to read content from the stream. Note that all
+of them only read a , you can
+use the following methods to read its content:
+
+### read(bytes, callback, strict) ###
+
+Reads the specified number of bytes from the stream. If `strict` is set to true
+(which is the default value), an error is produced when the stream ends before
+the number of bytes is available. If it is set to false, in that case, it will
+returned a reduced number of bytes containing the rest of the stream.
+
+```node
+var stream; // Of type BufferedStream
+stream.read(5, function(err, data) {
 	if(err)
-			; // An error occurred
-		else
-			; // data is a Buffer with the data in binary format
-	});
+		console.warn("There has been an error. Maybe the stream has ended and less than 5 bytes are available.");
+	else
+		; // data.length == 5
+});
+stream.read(5, function(err, data) {
+	if(err)
+		console.warn("There has been an error.");
+	else if(data.length < 5)
+		; // The stream has ended. data contains the very last bytes of it.
+	else
+		; // data.length == 5
+}, false);
+```
 
-### formats.dearmor(data) ###
+### readUntilEnd(callback) ###
 
-Converts the input data from armored ASCII to the binary format. `data` can be
-a Readable Stream, a Buffer, or a String. The function returns a
-[`BufferedStream`](#bufferedstream).
+Waits until the stream has ended and then calls the callback function with the
+whole amount of data.
 
-	pgp.formats.dearmor(fs.createReadStream("/tmp/test.asc")).readUntilEnd(function(err, data) {
+```node
+var stream; // Of type BufferedStream
+stream.readUntilEnd(function(err, data) {
+	if(err)
+		console.warn("An error occurred", err);
+	else
+		; // data contains the whole data
+});
+```
+
+### readLine(callback) ###
+
+Reads a line from the stream. The line-break is included in the provided data.
+
+```node
+var stream; // Of type BufferedStream
+stream.readLine(function(err, data) {
+	if(err)
+		console.warn("An error occurred", err);
+	else if(data.toString("utf8").indexOf("\n") == -1)
+		; // This is the last line of the stream
+	else
+		; // data contains a line ended with a line-break
+});
+```
+
+### readArbitrary(callback) ###
+
+Reads an arbitrary amount of data from the stream, at least 1 byte. All data
+that is currently available in the stream buffer will be passed to the callback
+function. This example passes all data from the stream to a writable stream.
+
+```node
+var stream; // Of type BufferedStream
+var writableStream;
+readOn();
+function readOn() {
+	stream.readArbitrary(err, data) {
 		if(err)
-			console.warn("An error occurred", err);
+			console.warn("There has been an error", err);
+		else if(data.length == 0)
+			writableStream.end(); // The stream has ended
+		else {
+			writableStream.write(data);
+			readOn();
+		}
+	};
+}
+```
+
+### whilst(iterator, callback) ###
+
+This function works like the `whilst()` method from the `async` library. It calls
+the `iterator` function with an arbitrary amount of data multiple times until the
+end of the stream is reached. Then, the `callback` function is called once with
+a possible error message.
+
+```node
+var stream; // Of type BufferedStream
+stream.whilst(function(data, callback) {
+	// Do something with the data chunk, maybe something asynchronous
+	var error; // A possible error that happened during the processing of the data
+	if(error)
+		callback(error); // Stops the reading and calls the second callback function with the error
+	else
+		callback(); // Reads the next chunk or calls the second callback function if the stream has ended
+}, function(err) {
+	// The stream has ended or an error occurred
+});
+```
+
+
+Fifo
+----
+
+Objects of this type represent a queue of items.
+
+There are two ways to read the items. The probably simpler one works similar to
+the `forEachSeries()` method from the `async` library:
+
+```node
+var fifo; // Of type Fifo
+fifo.forEachSeries(function(item, callback) {
+	// Do something with item, maybe something asynchronous
+	var error; // A possible error that happened during the processing of the item
+	if(error)
+		callback(error); // Breaks the loop and calls the second callback function with the error
+	else
+		callback(); // Loops to the next item, or calls the second callback function without an error if no items are left
+}, function(err) {
+	// The loop has ended
+});
+```
+
+The other method reads each item manually by using the `next` function:
+
+```node
+var fifo; // Of type Fifo
+readNext();
+function readNext() {
+	fifo.next(function(err, item) {
+		if(err === true)
+			; // No items left
+		else if(err)
+			console.log("An error occurred", err);
 		else
-			; // data is a Buffer with the data in binary format
+		{
+			// Do something with item.
+
+			readNext();
+		}
 	});
-
-### formats.enarmor(data, messageType) ###
-
-Converts the input data from binary format to armored ASCII format. `data` can
-be a Readable Stream, a Buffer, or a String. `messageType` is one of [`pgp.consts.ARMORED_MESSAGE`](#armored-message-type).
-The function returns a [`BufferedStream`](#bufferedstream).
-
-	pgp.formats.enarmor(fs.createReadStream("/tmp/test.pgp"), pgp.consts.ARMORED_MESSAGE).readUntilEnd(function(err, data) {
-		if(err)
-			console.warn("An error occurred", err);
-		else
-			; // data is a Buffer with the armored data encoded in UTF-8
-	});
+}
+```
 
 
-PGP packets
+Filter
+------
+
+Filters are used to filter objects by their properties. To get all version 4 keys with either
+2048 or 4096 bits for example, use the following filter:
+
+```node
+{ version: 4, size: [ 2048, 4096 ] }
+```
+
+The keys of the filter object are the properties to filter by, the values are the values to match.
+There are different classes that you can use instead of specifying the values directly:
+
+* `new pgp.Keyring.Filter.Equals("test")`: Matches `"test"`
+* `new pgp.Keyring.Filter.ArrayContains("test")`: Matches arrays that contain `"test"`
+* `new pgp.Keyring.Filter.EqualsIgnoreCase("test")`: Matches `"test"`, `"TEST"`, `"tEsT"` and so on
+* `new pgp.Keyring.Filter.ContainsIgnoreCase("test")`: Matches arrays that contain `"test"`, `"TEST"`,
+  `tEsT` and so on
+* `new pgp.Keyring.Filter.ShortKeyId("0A1B2C3D")`: Matches long key IDs like `"000000000A1B2C3D"`
+* `new pgp.Keyring.Filter.LessThan(5)`: Matches numbers less than 5
+* `new pgp.Keyring.Filter.LessThanOrEqual(5)`: Matches numbers less than or equal 5
+* `new pgp.Keyring.Filter.GreaterThan(5)`: Matches numbers greater than 5
+* `new pgp.Keyring.Filter.GreaterThanOrEqual(5)`: Matches numbers greater than or equal
+* `new pgp.Keyring.Filter.Not(new pgp.Keyring.Filter.Equals("test"))`: Matches everything but `"test"`
+* `new pgp.Keyring.Filter.Or(new pgp.Keyring.Filter.Equals("test1"), new pgp.Keyring.Filter.Equals("test2"),
+  new pgp.Keyring.Filter.Equals("test3")`: Matches `"test1"`, `"test2"`, `"test3"`
+* `new pgp.Keyring.Filter.And(new pgp.Keyring.Filter.Equals("test1"), new pgp.Keyring.Filter.Equals("test2"),
+  new pgp.keyring.Filter.Equals("test3")`: Matches nothing
+
+For example, to look up all version 4 keys with a key size 2048 or greater, use the following filter:
+
+```node
+{ version: 4, size: new pgp.Keyring.Filter.GreaterThanOrEqual(2048) }
+```
+
+
+Object info
 -----------
 
-OpenPGP data is made of multiple packets, which represent objects like a public
-key, a user ID that belongs to a key, a signature, or even the raw data that is
-being signed. These functions deal with those packets.
+### Public key info ###
 
-### packets.splitPackets(data) ###
-
-This method splits OpenPGP data into its packets. `data` can be a Readable
-Stream, a Buffer or a String containing the binary data to split. The method
-returns a [`Fifo`](#fifo) object, see below how to use that.
-
-	var split = packets.splitPackets(fs.createReadStream("/tmp/test.pgp"));
-	split.forEachSeries(function(type, header, body, callback) {
-		// type is the packet type, one of consts.PKT, see below.
-		// header is a Buffer containing the packet header.
-		// body is a Buffer containing the packet body.
-		
-		callback(); // Iterate to next packet
-	}, function(err) {
-		if(err)
-			console.warn("An error occurred", err);
-		else
-			; // All packets have been handled
-	});
-
-### packets.generatePacket(type, body) ###
-
-This method creates a PGP packet. `type` is one of [`consts.PKT`](#packet-type)
-(see below), `body` is a Buffer containing the packet body. The method returns
-a Buffer with the generated packet.
-
-	var keyBody,identityBody,signatureBody; // All of type Buffer
-	var completeKey = Buffer.concat([
-		pgp.packets.generatePacket(pgp.consts.PKT.PUBLIC_KEY, keyBody),
-		pgp.packets.generatePacket(pgp.consts.PKT.USER_ID, identityBody),
-		pgp.packets.generatePacket(pgp.consts.PKT.SIGNATURE, signatureBody)
-	]);
-
-### packetContent.getPublicKeyPacketInfo(packetBody, callback) ###
-
-This method gets information about a public key packet. `packetBody` is a
-Buffer containing the body of a public key packet. The `callback(err, info)`
-function receives an info object with the following content:
+Objects of this type may contain the following properties:
 
 * `pkt`: `consts.PKT.PUBLIC_KEY`
 * `id`: The long ID of the key, a 16-digit hex number as upper-case String
-* `binary`: `packetBody`
-* `version`: The body packet version, either 3 or 4
+* `binary`: The binary packet content containing this key (Buffer)
+* `version`: The key version, either 3 or 4
+* `versionSecurity`: How secure the key version makes this key, one of [`consts.SECURITY`](#security-level)
 * `expires`: `null` or a Date object indicating the expiration date of the key.
   Note that only v3 keys can have this defined in the key itself, and it can be
   overridden by self-signatures.
@@ -113,30 +479,33 @@ function receives an info object with the following content:
   Algorithm specific, might contain the values `n`, `e`, `p`, `q`, `g` and `y`
 * `fingerprint`: The fingerprint, a 32-digit hex number as upper-case String
 * `size`: The key size in bits
+* `sizeSecurity`: How secure the size makes this key, one of [`consts.SECURITY`](#security-level)
+* `security`: The overall security of this key’s properties, one of [`consts.SECURITY`](#security-level)
 
-### packetContent.getPublicSubkeyPacketInfo(packetBody, callback) ###
 
-This method gets information about a public subkey packet. Everything is the
-same as with `getPublicKeyPacketInfo`, only `pkt` is `consts.PKT.PUBLIC_SUBKEY`.
+### Public subkey info ###
 
-### packetContent.getIdentityPacketInfo(packetBody, callback) ###
+Objects of this type may contain the same properties as [public keys](#public-key-info),
+except that `pkt` is `consts.PKT.PUBLIC_SUBKEY`.
 
-This method gets information about an identity (user ID) packet. `packetBody` is
-a Buffer containing the body of the packet. `callback(err, info)` receives the
-following info object:
+
+### User ID info ###
+
+Objects of this type may contain the following properties:
 
 * `pkt`: `consts.PKT.USER_ID`
 * `name` : The name part of the ID as String
 * `email` : The e-mail part of the ID as String
 * `comment` : The comment part of the ID as String
-* `binary` : `packetBody`
+* `binary` : The binary packet content containing this identity (Buffer)
 * `id` : The whole ID as String
+* `nameTrust` : How reliable it is that this key belongs to a person with the name of
+  this identity, where 1.0 is considered to be reliable.
+* `emailTrust` : How reliable it is that this key belongs to the person who own the
+  e-mail address of this identity, where 1.0 is considered to be reliable.
 
-### packetContent.getAttributePacketInfo(packetBody, callback) ###
 
-This method gets information about an attribute packet. Attribute packets
-contain of several sub-packets, which can only be JPEG images.
-`callback(err, info)` receives the following info object:
+### Attribute info ###
 
 * `pkt`: `consts.PKT.ATTRIBUTE`,
 * `id`: An ID string to use for the attribute. This is a hash of the packet
@@ -148,12 +517,12 @@ contain of several sub-packets, which can only be JPEG images.
 	  image data.
 	* `imageType`: If `type` is `consts.ATTRSUBPKT.IMAGE`, this is  the image
 	  type, one of [`consts.IMAGETYPE`](#attribute-sub-packet-image-types)
-* `binary`: `packetBody`
+* `binary` : The binary packet content containing this attribute (Buffer)
+* `trust` : How reliable it is that this key belongs to the person who is depicted
+  on this picture, where 1.0 is considered to be reliable.
 
-### packetContent.getSignaturePacketType(packetBody, callback) ###
 
-This method gets information about a signature packet. The `callback(err, info)`
-function receives the following info object:
+### Signature info ###
 
 * `pkt`: `consts.PKT.SIGNATURE`,
 * `id` : An ID string created from a hash of this signature. Not part of the
@@ -164,7 +533,7 @@ function receives the following info object:
 * `pkalgo`: The public key algorithm, one of [`consts.PKALGO`](#public-key-algorithm)
 * `hashalgo`: The hash algorithm, one of [`consts.HASHALGO`](#hash-algorithm)
 * `version`: The signature packet version, 3 or 4
-* `binary`: `packetBody`
+* `binary`: The binary packet content containing this attribute (Buffer)
 * `hashedSubPackets`: An object with the hashed sub-packets
    (see [the RFC](http://tools.ietf.org/html/rfc4880#section-5.2.3.1)). The keys
    are the sub-packet types (one of [`consts.SIGSUBPKT`](#signature-sub-packet-type)),
@@ -183,157 +552,13 @@ function receives the following info object:
   used by the algorithm for making the signature.
 * `first2HashBytes`: The first two bytes of the hash as 16-bit unsigned integer
 * `signature`: A Buffer object with the actual signature part of the signature
-
-Concepts
-========
-
-Types
------
-
-### BufferedStream ###
-
-This class makes reading from a Readable Stream predictable by providing methods
-that ensure that a specified number of bytes is returned at once.
-
-Objects of this class are returned by several functions of this library. The
-following methods can be used to read content from the stream. Note that all
-of them only read a , you can
-use the following methods to read its content:
-
-#### read(bytes, callback, strict) ####
-
-Reads the specified number of bytes from the stream. If `strict` is set to true
-(which is the default value), an error is produced when the stream ends before
-the number of bytes is available. If it is set to false, in that case, it will
-returned a reduced number of bytes containing the rest of the stream.
-
-	var stream; // Of type BufferedStream
-	stream.read(5, function(err, data) {
-		if(err)
-			console.warn("There has been an error. Maybe the stream has ended and less than 5 bytes are available.");
-		else
-			; // data.length == 5
-	});
-	stream.read(5, function(err, data) {
-		if(err)
-			console.warn("There has been an error.");
-		else if(data.length < 5)
-			; // The stream has ended. data contains the very last bytes of it.
-		else
-			; // data.length == 5
-	}, false);
-
-#### readUntilEnd(callback) ####
-
-Waits until the stream has ended and then calls the callback function with the
-whole amount of data.
-
-	var stream; // Of type BufferedStream
-	stream.readUntilEnd(function(err, data) {
-		if(err)
-			console.warn("An error occurred", err);
-		else
-			; // data contains the whole data
-	});
-
-#### readLine(callback) ####
-
-Reads a line from the stream. The line-break is included in the provided data.
-
-	var stream; // Of type BufferedStream
-	stream.readLine(function(err, data) {
-		if(err)
-			console.warn("An error occurred", err);
-		else if(data.toString("utf8").indexOf("\n") == -1)
-			; // This is the last line of the stream
-		else
-			; // data contains a line ended with a line-break
-	});
-
-#### readArbitrary(callback) ####
-
-Reads an arbitrary amount of data from the stream, at least 1 byte. All data
-that is currently available in the stream buffer will be passed to the callback
-function. This example passes all data from the stream to a writable stream.
-
-	var stream; // Of type BufferedStream
-	var writableStream;
-	readOn();
-	function readOn() {
-		stream.readArbitrary(err, data) {
-			if(err)
-				console.warn("There has been an error", err);
-			else if(data.length == 0)
-				writableStream.end(); // The stream has ended
-			else {
-				writableStream.write(data);
-				readOn();
-			}
-		};
-	}
-
-#### whilst(iterator, callback) ####
-
-This function works like the `whilst()` method from the `async` library. It calls
-the `iterator` function with an arbitrary amount of data multiple times until the
-end of the stream is reached. Then, the `callback` function is called once with
-a possible error message.
-
-	var stream; // Of type BufferedStream
-	stream.whilst(function(data, callback) {
-		// Do something with the data chunk, maybe something asynchronous
-		var error; // A possible error that happened during the processing of the data
-		if(error)
-			callback(error); // Stops the reading and calls the second callback function with the error
-		else
-			callback(); // Reads the next chunk or calls the second callback function if the stream has ended
-	}, function(err) {
-		// The stream has ended or an error occurred
-	});
-
-
-### Fifo ###
-
-Objects of this type represent a queue of items.
-
-There are two ways to read the items. The probably simpler one works similar to
-the `forEachSeries()` method from the `async` library:
-
-	var fifo; // Of type Fifo
-	fifo.forEachSeries(function(item, callback) {
-		// Do something with item, maybe something asynchronous
-		var error; // A possible error that happened during the processing of the item
-		if(error)
-			callback(error); // Breaks the loop and calls the second callback function with the error
-		else
-			callback(); // Loops to the next item, or calls the second callback function without an error if no items are left
-	}, function(err) {
-		// The loop has ended
-	});
-
-The other method reads each item manually by using the `next` function:
-
-	var fifo; // Of type Fifo
-	readNext();
-	function readNext() {
-		fifo.next(function(err, item) {
-			if(err === true)
-				; // No items left
-			else if(err)
-				console.log("An error occurred", err);
-			else
-			{
-				// Do something with item.
-
-				readNext();
-			}
-		});
-	}
-
-### MPI ###
-
-Objects of this type represent a Multi-Precision Integer (MPI). The `length` property is the length of the number in **bits**. The first `length`
-bytes of the `buffer` property (which is a Buffer object) represent the number, encoded in Big Endian.
+* `hashalgoSecurity`: The security of the hash algorithm used in this signature,
+  one of [`consts.SECURITY`](#security-level)
+* `security`: The overall security of this signatures parameters, one of
+  [`consts.SECURITY`](#security-level)
+* `verified`: Whether it has been verified that this signature has actually been
+  issued by its issuer (Boolean)
+* `trustSignature`: Whether this signature is a trust signature (Boolean)
 
 
 Constants
@@ -463,3 +688,66 @@ can have.
 	PUBLIC_KEY    : "PUBLIC KEY BLOCK",
 	PRIVATE_KEY   : "PRIVATE KEY BLOCK",
 	SIGNATURE     : "SIGNATURE"
+
+### Security level ###
+
+`pgp.consts.SECURITY` defines level to indicate the security of key parameters.
+
+	UNKNOWN      : -1,
+	UNACCEPTABLE : 0,
+	BAD          : 1,
+	MEDIUM       : 2,
+	GOOD         : 3
+
+
+Format conversion functions
+===========================
+
+OpenPGP data can come in two different formats: in binary or “ASCII-armored”
+using base-64. These methods allow working with the different formats.
+
+## formats.decodeKeyFormat(data) ##
+
+This method converts the input data to the binary format, automatically
+detecting the format of the input data. `data` can be a Readable Stream, a
+Buffer, or a String. The function returns a [`BufferedStream`](#bufferedstream),
+see below how to work with that.
+
+```node
+pgp.formats.decodeKeyFormat(fs.createReadStream("/tmp/test.asc")).readUntilEnd(function(err, data) {
+if(err)
+		; // An error occurred
+	else
+		; // data is a Buffer with the data in binary format
+});
+```
+
+## formats.dearmor(data) ##
+
+Converts the input data from armored ASCII to the binary format. `data` can be
+a Readable Stream, a Buffer, or a String. The function returns a
+[`BufferedStream`](#bufferedstream).
+
+```node
+pgp.formats.dearmor(fs.createReadStream("/tmp/test.asc")).readUntilEnd(function(err, data) {
+	if(err)
+		console.warn("An error occurred", err);
+	else
+		; // data is a Buffer with the data in binary format
+});
+```
+
+## formats.enarmor(data, messageType) ##
+
+Converts the input data from binary format to armored ASCII format. `data` can
+be a Readable Stream, a Buffer, or a String. `messageType` is one of [`pgp.consts.ARMORED_MESSAGE`](#armored-message-type).
+The function returns a [`BufferedStream`](#bufferedstream).
+
+```node
+pgp.formats.enarmor(fs.createReadStream("/tmp/test.pgp"), pgp.consts.ARMORED_MESSAGE).readUntilEnd(function(err, data) {
+	if(err)
+		console.warn("An error occurred", err);
+	else
+		; // data is a Buffer with the armored data encoded in UTF-8
+});
+```
