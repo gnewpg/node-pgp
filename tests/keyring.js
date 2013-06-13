@@ -22,6 +22,9 @@ exports.nonexistantKeyring = function(test) {
 exports.cdauth = function(test) {
 	var expect = 2;
 
+	if(fs.existsSync("keyring.tmp"))
+		fs.unlinkSync("keyring.tmp");
+
 	pgp.keyringFile.getFileKeyring("keyring.tmp", function(err, keyring) {
 		test.ifError(err);
 
