@@ -4,6 +4,33 @@ JavaScript OpenPGP implementation following
 
 This page describes what is supported already.
 
+Features
+========
+
+Implemented
+-----------
+
+* Read and write keyring/key files that contain public keys/subkeys, identities, attributes
+  and signatures (both v3 or v4 format, as defined in RFC 4880). Access and search detailed
+  information about those packets.
+* Convert between ASCII-armoured and binary format.
+* Get the trustworthiness of identity information by marking single keys as trusted.
+  Trust and owner trust levels are calculated using signatures and trust signatures
+  issued by trusted keys. (Note: The cryptographic part of signature verification is
+  currently done using gnupg and is not yet implemented in JavaScript).
+* Encrypt messages for a given key, selecting the most appropriate subkey for this task.
+  (Note: The cryptographic part of encryption is currently done using gnupg and is not
+  yet implemented in JavaScript).
+
+To do
+-----
+
+* JavaScript-only signature verification and encryption
+* Support for symmetric PGP encryption
+* Support for dealing with private keys
+* Support for signing data and keys
+* Support for decrypting
+
 API documentation
 =================
 
