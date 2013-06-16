@@ -21,6 +21,7 @@ Implemented
 * Encrypt messages for a given key, selecting the most appropriate subkey for this task.
   (Note: The cryptographic part of encryption is currently done using gnupg and is not
   yet implemented in JavaScript).
+* Send encrypted e-mails using [node-pgp-mail](https://github.com/cdauth/node-pgp-mail).
 
 To do
 -----
