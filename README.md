@@ -505,7 +505,7 @@ Objects of this type may contain the following properties:
 * `pkalgo`: One of [`consts.PKALGO`](#public-key-algorithm)
 * `keyParts`: An object containing the relevant key parts as [MPI](#mpi) objects
   Algorithm specific, might contain the values `n`, `e`, `p`, `q`, `g` and `y`
-* `fingerprint`: The fingerprint, a 32-digit hex number as upper-case String
+* `fingerprint`: The fingerprint, a 32-digit (for v3 keys) or 40-digit (for v4 keys) hex number as upper-case String
 * `size`: The key size in bits
 * `sizeSecurity`: How secure the size makes this key, one of [`consts.SECURITY`](#security-level)
 * `security`: The overall security of this key’s properties, one of [`consts.SECURITY`](#security-level)
