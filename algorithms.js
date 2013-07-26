@@ -61,7 +61,7 @@ var sigInfo = null;
 packets.splitPackets(key).forEachSeries(function(type, header, body, cb) {
 	if(keyInfo == null)
 	{
-		packetContent.getPublicKeyPacketInfo(body, function(err, info) {
+		packetContent.getKeyPacketInfo(type, body, function(err, info) {
 			keyInfo = info;
 			cb();
 		});

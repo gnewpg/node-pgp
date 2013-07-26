@@ -427,7 +427,7 @@ exports.key1 = function(test) {
 	}
 	
 	function end() {
-		pgp.packetContent.getPublicKeyPacketInfo(key, function(err, info) {
+		pgp.packetContent.getKeyPacketInfo(null, key, function(err, info) {
 			test.ifError(err);
 
 			test.equals(info.version, 4);

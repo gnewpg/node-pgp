@@ -7,10 +7,12 @@ function getPacketInfo(tag, body, callback) {
 	switch(tag)
 	{
 		case consts.PKT.PUBLIC_KEY:
-			getPublicKeyPacketInfo(body, callback);
+		case consts.PKT.SECRET_KEY:
+			getKeyPacketInfo(tag, body, callback);
 			break;
 		case consts.PKT.PUBLIC_SUBKEY:
-			getPublicSubkeyPacketInfo(body, callback);
+		case consts.PKT.SECRET_SUBKEY:
+			getSubkeyPacketInfo(tag, body, callback);
 			break;
 		case consts.PKT.USER_ID:
 			getIdentityPacketInfo(body, callback);
@@ -26,10 +28,10 @@ function getPacketInfo(tag, body, callback) {
 	}
 }
 
-function getPublicKeyPacketInfo(body, callback)
+function getKeyPacketInfo(tag, body, callback)
 {
 	var ret = {
-		pkt: consts.PKT.PUBLIC_KEY,
+		pkt: tag,
 		id: null,
 		binary : body,
 		version : body.readUInt8(0),
@@ -120,9 +122,9 @@ function getPublicKeyPacketInfo(body, callback)
 	callback(null, ret);
 }
 
-function getPublicSubkeyPacketInfo(body, callback)
+function getSubkeyPacketInfo(pkt, body, callback)
 {
-	getPublicKeyPacketInfo(body, function(err, info) {
+	getKeyPacketInfo(pkt, body, function(err, info) {
 		if(err) { callback(err); return; }
 		
 		info.pkt = consts.PKT.PUBLIC_SUBKEY;
@@ -429,8 +431,8 @@ function getValueForSignatureSubPacket(type, binary) {
 }
 
 exports.getPacketInfo = getPacketInfo;
-exports.getPublicKeyPacketInfo = getPublicKeyPacketInfo;
-exports.getPublicSubkeyPacketInfo = getPublicSubkeyPacketInfo;
+exports.getKeyPacketInfo = getKeyPacketInfo;
+exports.getSubkeyPacketInfo = getSubkeyPacketInfo;
 exports.getAttributePacketInfo = getAttributePacketInfo;
 exports.getIdentityPacketInfo = getIdentityPacketInfo;
 exports.getSignaturePacketInfo = getSignaturePacketInfo;

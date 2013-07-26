@@ -146,6 +146,7 @@ utils.extend(Keyring.prototype, {
 
 					switch(tag) {
 						case consts.PKT.PUBLIC_KEY:
+						case consts.PKT.SECRET_KEY:
 							lastKeyImported = { type: tag, id: info.id, signatures: [ ], subkeys: [ ], identities: [ ], attributes: [ ] };
 							t.addKey(info, function(err) {
 								if(err)

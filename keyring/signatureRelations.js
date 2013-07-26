@@ -463,7 +463,7 @@ utils.extend(Keyring.prototype, {
 			if(err)
 				return callback(err);
 
-			packetContent.getPublicKeyPacketInfo(keyInfo.binary, function(err, keyInfoOrig) {
+			packetContent.getKeyPacketInfo(null, keyInfo.binary, function(err, keyInfoOrig) {
 				if(err)
 					return callback(err);
 
