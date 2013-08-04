@@ -97,11 +97,20 @@ function getKeyPacketInfo(tag, body, callback)
 			return callback(new Error("Unknown public key algorithm "+ret.pkalgo));
 
 		ret.key = body.slice(6, 6+keyParts.bytes);
-		
-		var fingerprintData = new Buffer(body.length + 3);
+
+		var bsize = keyParts.bytes + 6,
+			fingerprintData = new Buffer(bsize + 3);
+
 		fingerprintData.writeUInt8(0x99, 0);
-		fingerprintData.writeUInt16BE(body.length, 1);
-		body.copy(fingerprintData, 3);
+		fingerprintData.writeUInt16BE(bsize, 1);
+
+		// body
+		fingerprintData.writeUInt8(0x04, 3);
+		fingerprintData.writeUInt32BE(ret.date / 1000, 4)
+		fingerprintData.writeUInt8(ret.pkalgo, 8);
+
+		ret.key.copy(fingerprintData, 9);
+
 		ret.fingerprint = utils.hash(fingerprintData, "sha1", "hex").toUpperCase();
 		ret.id = ret.fingerprint.substring(ret.fingerprint.length-16);
 	}
